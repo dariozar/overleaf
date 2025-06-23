@@ -68,6 +68,7 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}:${{ matrix.platform }}-${{ github.ref_name }}-${{ github.sha }}
           cache-from: type=gha
+          provenance: false
       
       - name: Build and push sharelatex
         id: build-and-push
@@ -85,6 +86,7 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}:${{ matrix.platform }}-${{ github.ref_name }}-${{ github.sha }}
           cache-from: type=gha
+          provenance: false
 
   create-manifest-and-sign:
     name: Create and Sign Multi-Arch Manifest
