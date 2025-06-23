@@ -58,6 +58,8 @@ jobs:
       - name: Build and push sharelatex-base
         id: build-and-push-base
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
+        env:
+          IMAGE_PREFIX: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-base
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
@@ -66,14 +68,16 @@ jobs:
           build-args: |
             BUILDKIT_INLINE_CACHE=1
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-base:${{ github.ref_name }}-${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-base:${{ github.ref_name }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-base:latest
+            ${{ env.IMAGE_PREFIX }}:${{ github.ref_name }}-${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}:${{ github.ref_name }}
+            ${{ env.IMAGE_PREFIX }}:latest
           cache-from: type=gha
       
       - name: Build and push sharelatex
         id: build-and-push
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
+        env:
+          IMAGE_PREFIX: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
@@ -81,12 +85,12 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             BUILDKIT_INLINE_CACHE=1
-            OVERLEAF_BASE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/sharelatex-base:${{ github.ref_name }}-${{ github.sha }}
+            OVERLEAF_BASE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-base:${{ github.ref_name }}-${{ github.sha }}
             MONOREPO_REVISION=${{ github.sha }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/sharelatex:${{ github.ref_name }}-${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/sharelatex:${{ github.ref_name }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/sharelatex:latest
+            ${{ env.IMAGE_PREFIX }}:${{ github.ref_name }}-${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}:${{ github.ref_name }}
+            ${{ env.IMAGE_PREFIX }}:latest
           cache-from: type=gha
 
       
@@ -99,8 +103,12 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         env:
           # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
-          TAGS: ${{ steps.meta.outputs.tags }}
+          TAGS_BASE: ${{ steps.build-and-push-base.inputs.tags }}
+          DIGEST_BASE: ${{ steps.build-and-push-base.outputs.digest }}
+          TAGS: ${{ steps.build-and-push.inputs.tags }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         # This step uses the identity token to provision an ephemeral certificate
         # against the sigstore community Fulcio instance.
-        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+        run: |
+          echo "${TAGS_BASE}" | xargs -I {} cosign sign --yes {}@${DIGEST_BASE}
+          echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
