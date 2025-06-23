@@ -93,17 +93,17 @@ jobs:
     strategy:
       matrix:
         include:
-          - imageprefix: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-base
+          - imagesuffix: "-base"
             tag: ${{ github.ref_name }}-${{ github.sha }}
-          - imageprefix: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-base
+          - imagesuffix: "-base"
             tag: ${{ github.ref_name }}
-          - imageprefix: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-base
+          - imagesuffix: "-base"
             tag: latest
-          - imageprefix: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          - imagesuffix: ""
             tag: ${{ github.ref_name }}-${{ github.sha }}
-          - imageprefix: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          - imagesuffix: ""
             tag: ${{ github.ref_name }}
-          - imageprefix: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          - imagesuffix: ""
             tag: latest
     permissions:
       packages: write
@@ -120,15 +120,19 @@ jobs:
           cosign-release: 'v2.2.4'
 
       - name: Create and push manifest list for ${{ matrix.imageprefix }}:${{ matrix.tag }}
+        env:
+          IMAGE_PREFIX: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.imagesuffix }}
         run: |
-          docker manifest create ${{ matrix.imageprefix }}:${{ matrix.tag }} \
-            ${{ matrix.imageprefix }}:linux-amd64-${{ github.ref_name }}-${{ github.sha }} \
-            ${{ matrix.imageprefix }}:linux-arm64-${{ github.ref_name }}-${{ github.sha }}
+          docker manifest create ${{ env.IMAGE_PREFIX }}:${{ matrix.tag }} \
+            ${{ env.IMAGE_PREFIX }}:linux-amd64-${{ github.ref_name }}-${{ github.sha }} \
+            ${{ env.IMAGE_PREFIX }}:linux-arm64-${{ github.ref_name }}-${{ github.sha }}
 
-          docker manifest push ${{ matrix.imageprefix }}:${{ matrix.tag }}
+          docker manifest push ${{ env.IMAGE_PREFIX }}:${{ matrix.tag }}
 
       - name: Sign multi-arch manifests
+        env:
+          IMAGE_PREFIX: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}${{ matrix.imagesuffix }}
         run: |
-          cosign sign --yes ${{ matrix.imageprefix }}:${{ matrix.tag }}
+          cosign sign --yes ${{ env.IMAGE_PREFIX }}:${{ matrix.tag }}
 
           
