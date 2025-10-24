@@ -5,10 +5,13 @@ import Errors from '../../../../app/src/Features/Errors/Errors.js'
 
 const ObjectId = mongodb.ObjectId
 
-const MODULE_PATH = new URL(
-  '../../../../app/src/Features/Project/ProjectListController',
-  import.meta.url
-).pathname
+const MODULE_PATH = `${import.meta.dirname}/../../../../app/src/Features/Project/ProjectListController`
+
+// Mock AnalyticsManager as it isn't used in these tests but causes the User model to be imported
+// TODO: remove this once all models are ESM and this kind of mocking is no longer necessary
+vi.mock('../../../../app/src/Features/Analytics/AnalyticsManager.js', () => {
+  return {}
+})
 
 describe('ProjectListController', function () {
   beforeEach(async function (ctx) {
@@ -20,7 +23,19 @@ describe('ProjectListController', function () {
       first_name: 'bjkdsjfk',
       features: {},
       emails: [{ email: 'test@overleaf.com' }],
+      lastActive: new Date(2),
+      signUpDate: new Date(1),
       lastLoginIp: '111.111.111.112',
+      ace: {
+        syntaxValidation: true,
+        pdfViewer: 'pdfjs',
+        spellCheckLanguage: 'en',
+        autoPairDelimiters: true,
+        autoComplete: true,
+        fontSize: 12,
+        theme: 'textmate',
+        mode: 'none',
+      },
     }
     ctx.users = {
       'user-1': {
@@ -52,6 +67,22 @@ describe('ProjectListController', function () {
     ctx.settings = {
       siteUrl: 'https://overleaf.com',
     }
+    ctx.onboardingDataCollection = {
+      companyDivisionDepartment: '',
+      companyJobTitle: '',
+      firstName: 'Dos',
+      governmentJobTitle: '',
+      institutionName: '',
+      lastName: 'Mukasan',
+      nonprofitDivisionDepartment: '',
+      nonprofitJobTitle: '',
+      otherJobTitle: '',
+      primaryOccupation: 'company',
+      role: 'conductor',
+      subjectArea: 'music',
+      updatedAt: '2025-09-04T12:12:21.628Z',
+      usedLatex: 'occasionally',
+    }
     ctx.TagsHandler = {
       promises: {
         getAllTags: sinon.stub().resolves(ctx.tags),
@@ -64,6 +95,9 @@ describe('ProjectListController', function () {
     }
     ctx.UserModel = {
       findById: sinon.stub().resolves(ctx.user),
+    }
+    ctx.OnboardingDataCollectionModel = {
+      findById: sinon.stub().resolves(ctx.onboardingDataCollection),
     }
     ctx.UserPrimaryEmailCheckHandler = {
       requiresPrimaryEmailCheck: sinon.stub().returns(false),
@@ -87,6 +121,7 @@ describe('ProjectListController', function () {
       promises: {
         getUsers: sinon.stub().resolves(ctx.usersArr),
         getUserFullEmails: sinon.stub().resolves([]),
+        getWritefullData: sinon.stub().resolves({ isPremium: true }),
       },
     }
     ctx.Features = {
@@ -145,6 +180,18 @@ describe('ProjectListController', function () {
       },
     }
 
+    ctx.PermissionsManager = {
+      promises: {
+        checkUserPermissions: sinon.stub().resolves(true),
+      },
+    }
+
+    ctx.SubscriptionLocator = {
+      promises: {
+        getUsersSubscription: sinon.stub().resolves({}),
+      },
+    }
+
     vi.doMock('mongodb-legacy', () => ({
       default: { ObjectId },
     }))
@@ -192,6 +239,10 @@ describe('ProjectListController', function () {
 
     vi.doMock('../../../../app/src/models/User', () => ({
       User: ctx.UserModel,
+    }))
+
+    vi.doMock('../../../../app/src/models/OnboardingDataCollection', () => ({
+      OnboardingDataCollection: ctx.OnboardingDataCollectionModel,
     }))
 
     vi.doMock('../../../../app/src/Features/Project/ProjectGetter', () => ({
@@ -250,6 +301,19 @@ describe('ProjectListController', function () {
       default: ctx.TutorialHandler,
     }))
 
+    vi.doMock(
+      '../../../../app/src/Features/Authorization/PermissionsManager',
+      () => ({
+        default: ctx.PermissionsManager,
+      })
+    )
+    vi.doMock(
+      '../../../../app/src/Features/Subscription/SubscriptionLocator',
+      () => ({
+        default: ctx.SubscriptionLocator,
+      })
+    )
+
     ctx.ProjectListController = (await import(MODULE_PATH)).default
 
     ctx.req = {
@@ -272,19 +336,25 @@ describe('ProjectListController', function () {
   describe('projectListPage', function () {
     beforeEach(function (ctx) {
       ctx.projects = [
-        { _id: 1, lastUpdated: 1, owner_ref: 'user-1' },
+        { _id: 1, lastUpdated: new Date(1), owner_ref: 'user-1' },
         {
           _id: 2,
-          lastUpdated: 2,
+          lastUpdated: new Date(2),
           owner_ref: 'user-2',
           lastUpdatedBy: 'user-1',
         },
       ]
-      ctx.readAndWrite = [{ _id: 5, lastUpdated: 5, owner_ref: 'user-1' }]
-      ctx.readOnly = [{ _id: 3, lastUpdated: 3, owner_ref: 'user-1' }]
-      ctx.tokenReadAndWrite = [{ _id: 6, lastUpdated: 5, owner_ref: 'user-4' }]
-      ctx.tokenReadOnly = [{ _id: 7, lastUpdated: 4, owner_ref: 'user-5' }]
-      ctx.review = [{ _id: 8, lastUpdated: 4, owner_ref: 'user-6' }]
+      ctx.readAndWrite = [
+        { _id: 5, lastUpdated: new Date(5), owner_ref: 'user-1' },
+      ]
+      ctx.readOnly = [{ _id: 3, lastUpdated: new Date(3), owner_ref: 'user-1' }]
+      ctx.tokenReadAndWrite = [
+        { _id: 6, lastUpdated: new Date(5), owner_ref: 'user-4' },
+      ]
+      ctx.tokenReadOnly = [
+        { _id: 7, lastUpdated: new Date(4), owner_ref: 'user-5' },
+      ]
+      ctx.review = [{ _id: 8, lastUpdated: new Date(4), owner_ref: 'user-6' }]
       ctx.allProjects = {
         owned: ctx.projects,
         readAndWrite: ctx.readAndWrite,
@@ -297,8 +367,8 @@ describe('ProjectListController', function () {
       ctx.ProjectGetter.promises.findAllUsersProjects.resolves(ctx.allProjects)
     })
 
-    it('should render the project/list-react page', function (ctx) {
-      return new Promise(resolve => {
+    it('should render the project/list-react page', async function (ctx) {
+      await new Promise(resolve => {
         ctx.res.render = (pageName, opts) => {
           pageName.should.equal('project/list-react')
           resolve()
@@ -307,8 +377,8 @@ describe('ProjectListController', function () {
       })
     })
 
-    it('should invoke the session maintenance', function (ctx) {
-      return new Promise(resolve => {
+    it('should invoke the session maintenance', async function (ctx) {
+      await new Promise(resolve => {
         ctx.Features.hasFeature.withArgs('saas').returns(true)
         ctx.res.render = () => {
           ctx.SplitTestSessionHandler.promises.sessionMaintenance.should.have.been.calledWith(
@@ -321,8 +391,8 @@ describe('ProjectListController', function () {
       })
     })
 
-    it('should send the tags', function (ctx) {
-      return new Promise(resolve => {
+    it('should send the tags', async function (ctx) {
+      await new Promise(resolve => {
         ctx.res.render = (pageName, opts) => {
           opts.tags.length.should.equal(ctx.tags.length)
           resolve()
@@ -331,8 +401,8 @@ describe('ProjectListController', function () {
       })
     })
 
-    it('should create trigger ip matcher notifications', function (ctx) {
-      return new Promise(resolve => {
+    it('should create trigger ip matcher notifications', async function (ctx) {
+      await new Promise(resolve => {
         ctx.settings.overleaf = true
         ctx.req.ip = '111.111.111.111'
         ctx.res.render = (pageName, opts) => {
@@ -345,8 +415,8 @@ describe('ProjectListController', function () {
       })
     })
 
-    it('should send the projects', function (ctx) {
-      return new Promise(resolve => {
+    it('should send the projects', async function (ctx) {
+      await new Promise(resolve => {
         ctx.res.render = (pageName, opts) => {
           opts.prefetchedProjectsBlob.projects.length.should.equal(
             ctx.projects.length +
@@ -362,8 +432,8 @@ describe('ProjectListController', function () {
       })
     })
 
-    it('should send the user', function (ctx) {
-      return new Promise(resolve => {
+    it('should send the user', async function (ctx) {
+      await new Promise(resolve => {
         ctx.res.render = (pageName, opts) => {
           opts.user.should.deep.equal(ctx.user)
           resolve()
@@ -372,8 +442,8 @@ describe('ProjectListController', function () {
       })
     })
 
-    it('should inject the users', function (ctx) {
-      return new Promise(resolve => {
+    it('should inject the users', async function (ctx) {
+      await new Promise(resolve => {
         ctx.res.render = (pageName, opts) => {
           const projects = opts.prefetchedProjectsBlob.projects
 
@@ -401,8 +471,8 @@ describe('ProjectListController', function () {
       })
     })
 
-    it("should send the user's best subscription when saas feature present", function (ctx) {
-      return new Promise(resolve => {
+    it("should send the user's best subscription when saas feature present", async function (ctx) {
+      await new Promise(resolve => {
         ctx.Features.hasFeature.withArgs('saas').returns(true)
         ctx.res.render = (pageName, opts) => {
           expect(opts.usersBestSubscription).to.deep.include({ type: 'free' })
@@ -412,8 +482,8 @@ describe('ProjectListController', function () {
       })
     })
 
-    it('should not return a best subscription without saas feature', function (ctx) {
-      return new Promise(resolve => {
+    it('should not return a best subscription without saas feature', async function (ctx) {
+      await new Promise(resolve => {
         ctx.Features.hasFeature.withArgs('saas').returns(false)
         ctx.res.render = (pageName, opts) => {
           expect(opts.usersBestSubscription).to.be.undefined
@@ -423,8 +493,8 @@ describe('ProjectListController', function () {
       })
     })
 
-    it('should show INR Banner for Indian users with free account', function (ctx) {
-      return new Promise(resolve => {
+    it('should show INR Banner for Indian users with free account', async function (ctx) {
+      await new Promise(resolve => {
         // usersBestSubscription is only available when saas feature is present
         ctx.Features.hasFeature.withArgs('saas').returns(true)
         ctx.SubscriptionViewModelBuilder.promises.getUsersSubscriptionDetails.resolves(
@@ -445,8 +515,8 @@ describe('ProjectListController', function () {
       })
     })
 
-    it('should not show INR Banner for Indian users with premium account', function (ctx) {
-      return new Promise(resolve => {
+    it('should not show INR Banner for Indian users with premium account', async function (ctx) {
+      await new Promise(resolve => {
         // usersBestSubscription is only available when saas feature is present
         ctx.Features.hasFeature.withArgs('saas').returns(true)
         ctx.SubscriptionViewModelBuilder.promises.getUsersSubscriptionDetails.resolves(
@@ -467,9 +537,121 @@ describe('ProjectListController', function () {
       })
     })
 
-    describe('With Institution SSO feature', function () {
+    it('should redirect to domain capture page', async function (ctx) {
+      await new Promise(resolve => {
+        ctx.Features.hasFeature.withArgs('saas').returns(true)
+        ctx.SplitTestHandler.promises.getAssignment
+          .withArgs(ctx.req, ctx.res, 'domain-capture-redirect')
+          .resolves({ variant: 'enabled' })
+        ctx.Modules.promises.hooks.fire
+          .withArgs('findDomainCaptureGroupUserCouldBePartOf', ctx.user._id)
+          .resolves([{ _id: new ObjectId(), managedUsersEnabled: true }])
+        ctx.res.redirect = url => {
+          url.should.equal('/domain-capture')
+          resolve()
+        }
+        ctx.ProjectListController.projectListPage(ctx.req, ctx.res)
+      })
+    })
+
+    describe('when user linked to SSO', function () {
+      const linkedEmail = 'picard@starfleet.com'
+      const universityName = 'Starfleet'
+      const notificationData = {
+        email: linkedEmail,
+        institutionName: universityName,
+      }
       beforeEach(function (ctx) {
-        return new Promise(resolve => {
+        ctx.Features.hasFeature.withArgs('saml').returns(true)
+        ctx.req.session.saml = {
+          institutionEmail: linkedEmail,
+          linked: {
+            universityName,
+          },
+        }
+      })
+
+      it('should render with Commons template when Commons was linked', async function (ctx) {
+        await new Promise(resolve => {
+          ctx.res.render = (pageName, opts) => {
+            expect(opts.notificationsInstitution).to.deep.equal([
+              Object.assign(
+                { templateKey: 'notification_institution_sso_linked' },
+                notificationData
+              ),
+            ])
+            resolve()
+          }
+          ctx.ProjectListController.projectListPage(ctx.req, ctx.res)
+        })
+      })
+
+      describe('when via domain capture', function () {
+        beforeEach(function (ctx) {
+          ctx.req.session.saml.domainCaptureEnabled = true
+        })
+
+        it('should render with group template', async function (ctx) {
+          await new Promise(resolve => {
+            ctx.res.render = (pageName, opts) => {
+              expect(opts.notificationsInstitution).to.deep.equal([
+                Object.assign(
+                  { templateKey: 'notification_group_sso_linked' },
+                  notificationData
+                ),
+              ])
+              resolve()
+            }
+            ctx.ProjectListController.projectListPage(ctx.req, ctx.res)
+          })
+        })
+
+        describe('user created via domain capture and group is managed', function () {
+          beforeEach(function (ctx) {
+            ctx.req.session.saml.userCreatedViaDomainCapture = true
+          })
+          it('should render with notification_group_sso_linked', async function (ctx) {
+            await new Promise(resolve => {
+              ctx.res.render = (pageName, opts) => {
+                expect(opts.notificationsInstitution).to.deep.equal([
+                  Object.assign(
+                    {
+                      templateKey: 'notification_group_sso_linked',
+                    },
+                    notificationData
+                  ),
+                ])
+                resolve()
+              }
+              ctx.ProjectListController.projectListPage(ctx.req, ctx.res)
+            })
+          })
+
+          it('should render with notification_account_created_via_group_domain_capture_and_managed_users_enabled when managed user is enabled', async function (ctx) {
+            ctx.req.session.saml.managedUsersEnabled = true
+            await new Promise(resolve => {
+              ctx.res.render = (pageName, opts) => {
+                expect(opts.notificationsInstitution).to.deep.equal([
+                  Object.assign(
+                    {
+                      templateKey:
+                        'notification_account_created_via_group_domain_capture_and_managed_users_enabled',
+                    },
+                    notificationData
+                  ),
+                ])
+                resolve()
+              }
+              ctx.ProjectListController.projectListPage(ctx.req, ctx.res)
+            })
+          })
+        })
+      })
+    })
+
+    describe('With Institution SSO feature', function () {
+      beforeEach(async function (ctx) {
+        await new Promise(resolve => {
           ctx.institutionEmail = 'test@overleaf.com'
           ctx.institutionName = 'Overleaf'
           ctx.Features.hasFeature.withArgs('saml').returns(true)
@@ -516,6 +698,39 @@ describe('ProjectListController', function () {
             email: ctx.institutionEmail,
             institutionName: ctx.institutionName,
             templateKey: 'notification_institution_sso_linked',
+          })
+        }
+        ctx.ProjectListController.projectListPage(ctx.req, ctx.res)
+      })
+      it('should show a group linked notification when domain capture enabled', function (ctx) {
+        ctx.req.session.saml = {
+          institutionEmail: ctx.institutionEmail,
+          linked: {
+            hasEntitlement: false,
+            universityName: ctx.institutionName,
+          },
+          domainCaptureEnabled: true,
+        }
+        ctx.res.render = (pageName, opts) => {
+          expect(opts.notificationsInstitution).to.deep.include({
+            email: ctx.institutionEmail,
+            institutionName: ctx.institutionName,
+            templateKey: 'notification_group_sso_linked',
+          })
+        }
+        ctx.ProjectListController.projectListPage(ctx.req, ctx.res)
+      })
+      it('should show a success notification when joining group via domain capture page', function (ctx) {
+        ctx.req.session.saml = {
+          linkedGroup: true,
+          universityName: ctx.institutionName,
+          domainCaptureJoin: true,
+        }
+        ctx.res.render = (pageName, opts) => {
+          expect(opts).to.deep.include({
+            groupSsoSetupSuccess: true,
+            joinedGroupName: ctx.institutionName,
+            viaDomainCapture: true,
           })
         }
         ctx.ProjectListController.projectListPage(ctx.req, ctx.res)
@@ -599,8 +814,8 @@ describe('ProjectListController', function () {
       })
 
       describe('for an unconfirmed domain for an SSO institution', function () {
-        beforeEach(function (ctx) {
-          return new Promise(resolve => {
+        beforeEach(async function (ctx) {
+          await new Promise(resolve => {
             ctx.UserGetter.promises.getUserFullEmails.resolves([
               {
                 email: 'test@overleaf-uncofirmed.com',
@@ -648,8 +863,8 @@ describe('ProjectListController', function () {
         })
       })
       describe('Institution with SSO beta testable', function () {
-        beforeEach(function (ctx) {
-          return new Promise(resolve => {
+        beforeEach(async function (ctx) {
+          await new Promise(resolve => {
             ctx.UserGetter.promises.getUserFullEmails.resolves([
               {
                 email: 'beta@beta.com',
@@ -692,11 +907,34 @@ describe('ProjectListController', function () {
           ctx.ProjectListController.projectListPage(ctx.req, ctx.res)
         })
       })
+      describe('group domain capture enabled for domain', function () {
+        it('does not show institution SSO available notification', function (ctx) {
+          ctx.UserGetter.promises.getUserFullEmails.resolves([
+            {
+              email: 'test@overleaf.com',
+              affiliation: {
+                group: { domainCaptureEnabled: true },
+                institution: {
+                  id: 1,
+                  confirmed: true,
+                  name: 'Overleaf',
+                  ssoBeta: false,
+                  ssoEnabled: true,
+                },
+              },
+            },
+          ])
+          ctx.res.render = (pageName, opts) => {
+            expect(opts.notificationsInstitution).to.deep.equal([])
+            ctx.ProjectListController.projectListPage(ctx.req, ctx.res)
+          }
+        })
+      })
     })
 
     describe('Without Institution SSO feature', function () {
-      beforeEach(function (ctx) {
-        return new Promise(resolve => {
+      beforeEach(async function (ctx) {
+        await new Promise(resolve => {
           ctx.Features.hasFeature.withArgs('saml').returns(false)
           resolve()
         })
@@ -811,17 +1049,21 @@ describe('ProjectListController', function () {
   describe('projectListReactPage with duplicate projects', function () {
     beforeEach(function (ctx) {
       ctx.projects = [
-        { _id: 1, lastUpdated: 1, owner_ref: 'user-1' },
-        { _id: 2, lastUpdated: 2, owner_ref: 'user-2' },
+        { _id: 1, lastUpdated: new Date(1), owner_ref: 'user-1' },
+        { _id: 2, lastUpdated: new Date(2), owner_ref: 'user-2' },
       ]
-      ctx.readAndWrite = [{ _id: 5, lastUpdated: 5, owner_ref: 'user-1' }]
-      ctx.readOnly = [{ _id: 3, lastUpdated: 3, owner_ref: 'user-1' }]
-      ctx.tokenReadAndWrite = [{ _id: 6, lastUpdated: 5, owner_ref: 'user-4' }]
+      ctx.readAndWrite = [
+        { _id: 5, lastUpdated: new Date(5), owner_ref: 'user-1' },
+      ]
+      ctx.readOnly = [{ _id: 3, lastUpdated: new Date(3), owner_ref: 'user-1' }]
+      ctx.tokenReadAndWrite = [
+        { _id: 6, lastUpdated: new Date(5), owner_ref: 'user-4' },
+      ]
       ctx.tokenReadOnly = [
-        { _id: 6, lastUpdated: 5, owner_ref: 'user-4' }, // Also in tokenReadAndWrite
-        { _id: 7, lastUpdated: 4, owner_ref: 'user-5' },
+        { _id: 6, lastUpdated: new Date(5), owner_ref: 'user-4' }, // Also in tokenReadAndWrite
+        { _id: 7, lastUpdated: new Date(4), owner_ref: 'user-5' },
       ]
-      ctx.review = [{ _id: 8, lastUpdated: 5, owner_ref: 'user-6' }]
+      ctx.review = [{ _id: 8, lastUpdated: new Date(5), owner_ref: 'user-6' }]
       ctx.allProjects = {
         owned: ctx.projects,
         readAndWrite: ctx.readAndWrite,
@@ -834,8 +1076,8 @@ describe('ProjectListController', function () {
       ctx.ProjectGetter.promises.findAllUsersProjects.resolves(ctx.allProjects)
     })
 
-    it('should render the project/list-react page', function (ctx) {
-      return new Promise(resolve => {
+    it('should render the project/list-react page', async function (ctx) {
+      await new Promise(resolve => {
         ctx.res.render = (pageName, opts) => {
           pageName.should.equal('project/list-react')
           resolve()
@@ -844,8 +1086,8 @@ describe('ProjectListController', function () {
       })
     })
 
-    it('should omit one of the projects', function (ctx) {
-      return new Promise(resolve => {
+    it('should omit one of the projects', async function (ctx) {
+      await new Promise(resolve => {
         ctx.res.render = (pageName, opts) => {
           opts.prefetchedProjectsBlob.projects.length.should.equal(
             ctx.projects.length +

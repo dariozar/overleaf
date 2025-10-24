@@ -1,80 +1,28 @@
-import MaterialIcon, {
-  AvailableUnfilledIcon,
-} from '@/shared/components/material-icon'
-import { ReactElement, useMemo, useState } from 'react'
-import {
-  Nav,
-  NavLink,
-  TabContainer,
-  TabContent,
-  TabPane,
-} from 'react-bootstrap'
-import { useTranslation } from 'react-i18next'
-import EditorSettings from './editor-settings/editor-settings'
-import AppearanceSettings from './appearance-settings/appearance-settings'
-import CompilerSettings from './compiler-settings/compiler-settings'
+import MaterialIcon from '@/shared/components/material-icon'
 
-export type SettingsEntry = SettingsLink | SettingsTab
+import { Nav, NavLink, TabContainer, TabContent } from 'react-bootstrap'
+import { SettingsEntry } from '../../contexts/settings-modal-context'
+import SettingsTabPane from './settings-tab-pane'
 
-type SettingsTab = {
-  icon: AvailableUnfilledIcon
-  key: string
-  component: ReactElement
-  title: string
-}
-
-type SettingsLink = {
-  key: string
-  icon: AvailableUnfilledIcon
-  href: string
-  title: string
-}
-
-export const SettingsModalBody = () => {
-  const { t } = useTranslation()
-  const settingsTabs: SettingsEntry[] = useMemo(
-    () => [
-      {
-        key: 'editor',
-        title: t('editor'),
-        icon: 'code',
-        component: <EditorSettings />,
-      },
-      {
-        key: 'compiler',
-        title: t('compiler'),
-        icon: 'picture_as_pdf',
-        component: <CompilerSettings />,
-      },
-      {
-        key: 'appearance',
-        title: t('appearance'),
-        icon: 'brush',
-        component: <AppearanceSettings />,
-      },
-      {
-        key: 'account_settings',
-        title: t('account_settings'),
-        icon: 'settings',
-        href: '/user/settings',
-      },
-    ],
-    [t]
-  )
-  const [activeTab, setActiveTab] = useState<string | null | undefined>(
-    settingsTabs[0]?.key
-  )
-
+export const SettingsModalBody = ({
+  activeTab,
+  setActiveTab,
+  settingsTabs,
+}: {
+  activeTab: string | null | undefined
+  setActiveTab: (tab: string | null | undefined) => void
+  settingsTabs: SettingsEntry[]
+}) => {
   return (
     <TabContainer
       transition={false}
       onSelect={setActiveTab}
-      defaultActiveKey={activeTab ?? undefined}
+      activeKey={activeTab ?? undefined}
       id="ide-settings-tabs"
     >
       <div className="d-flex flex-row">
         <Nav
-          defaultActiveKey={settingsTabs[0]?.key}
+          activeKey={activeTab ?? undefined}
           className="d-flex flex-column ide-settings-tab-nav"
         >
           {settingsTabs.map(entry => (
@@ -83,11 +31,9 @@ export const SettingsModalBody = () => {
         </Nav>
         <TabContent className="ide-settings-tab-content">
           {settingsTabs
-            .filter(t => 'component' in t)
-            .map(({ key, component }) => (
-              <TabPane eventKey={key} key={key}>
-                {component}
-              </TabPane>
+            .filter(t => 'sections' in t)
+            .map(tab => (
+              <SettingsTabPane tab={tab} key={tab.key} />
             ))}
         </TabContent>
       </div>

@@ -509,8 +509,43 @@ describe('<UserNotifications />', function () {
       render(<Institution />)
       fetchMock.delete(`/notifications/${institution._id}`, 200)
 
-      screen.getByRole('alert')
-      screen.getByText(/has been linked to your/i)
+      const notificationEl = screen.getByRole('alert')
+      expect(notificationEl.textContent).to.match(
+        new RegExp(
+          `your Overleaf account on ${notificationsInstitution.email} ` +
+            `has been linked to your ${notificationsInstitution.institutionName} ` +
+            `institutional account.`,
+          'i'
+        )
+      )
+
+      const closeBtn = screen.getByRole('button', { name: /close/i })
+      fireEvent.click(closeBtn)
+
+      expect(fetchMock.callHistory.called()).to.be.true
+      expect(screen.queryByRole('alert')).to.be.null
+    })
+
+    it('shows sso linked to group with domain capture enabled', function () {
+      const institution: DeepPartial<InstitutionType> = {
+        _id: 1,
+        templateKey: 'notification_group_sso_linked',
+      }
+      window.metaAttributesCache.set('ol-notificationsInstitution', [
+        { ...notificationsInstitution, ...institution },
+      ])
+      render(<Institution />)
+      fetchMock.delete(`/notifications/${institution._id}`, 200)
+
+      const notificationEl = screen.getByRole('alert')
+      expect(notificationEl.textContent).to.match(
+        new RegExp(
+          `your Overleaf account on ${notificationsInstitution.email} ` +
+            `has been linked to your ${notificationsInstitution.institutionName} ` +
+            `account.`,
+          'i'
+        )
+      )
 
       const closeBtn = screen.getByRole('button', { name: /close/i })
       fireEvent.click(closeBtn)
@@ -614,8 +649,13 @@ describe('<UserNotifications />', function () {
         unconfirmedUserData,
         signUpDate
       )
+      const dateOptions: Intl.DateTimeFormatOptions = {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      }
       expect(emailDeletionDate).to.equal(
-        new Date('2025-09-03').toLocaleDateString()
+        new Date('2025-09-03').toLocaleDateString(undefined, dateOptions)
       )
     })
 
@@ -837,24 +877,22 @@ describe('<UserNotifications />', function () {
       )
 
       const sendReconfirmationMock = fetchMock.post(
-        '/user/emails/send-reconfirmation',
+        '/user/emails/send-confirmation-code',
         200
       )
       fireEvent.click(
-        screen.getByRole('button', { name: /confirm affiliation/i })
+        screen.getByRole('button', { name: 'Send confirmation code' })
       )
 
-      await waitForElementToBeRemoved(() => screen.getByText(/loading/i))
-      screen.getByText(/check your email inbox to confirm/i)
-      expect(screen.queryByRole('button', { name: /confirm affiliation/i })).to
-        .be.null
-      expect(screen.queryByRole('link', { name: /remove it/i })).to.be.null
-      expect(screen.queryByRole('link', { name: /learn more/i })).to.be.null
+      await waitForElementToBeRemoved(() => screen.getByText(/sending/i))
+      screen.getByText(/Enter the 6-digit code sent to foo@overleaf.com/i)
       expect(sendReconfirmationMock.callHistory.called()).to.be.true
       fireEvent.click(
-        screen.getByRole('button', { name: /resend confirmation email/i })
+        screen.getByRole('button', { name: /resend confirmation code/i })
       )
-      await waitForElementToBeRemoved(() => screen.getByText('Sending…'))
+      await waitForElementToBeRemoved(() =>
+        screen.getByText('Resending confirmation code')
+      )
       expect(sendReconfirmationMock.callHistory.calls()).to.have.lengthOf(2)
     })
 
@@ -911,6 +949,8 @@ describe('<UserNotifications />', function () {
         'ol-groupsAndEnterpriseBannerVariant',
         'on-premise'
       )
+
+      window.metaAttributesCache.set('ol-inactiveTutorials', '[]')
     })
 
     afterEach(function () {
@@ -936,9 +976,9 @@ describe('<UserNotifications />', function () {
       await screen.findByRole('link', { name: 'Contact sales' })
     })
 
-    it('shows the banner for users that have dismissed the banner more than 30 days ago', async function () {
+    it('does not show the banner for users that have dismissed the banner within the last 30 days and before server-side state', async function () {
       const dismissed = new Date()
-      dismissed.setDate(dismissed.getDate() - 31) // 31 days
+      dismissed.setDate(dismissed.getDate() - 29) // 29 days
       window.metaAttributesCache.set('ol-showGroupsAndEnterpriseBanner', true)
       localStorage.setItem(
         'has_dismissed_groups_and_enterprise_banner',
@@ -948,17 +988,28 @@ describe('<UserNotifications />', function () {
       renderWithinProjectListProvider(GroupsAndEnterpriseBanner)
       await fetchMock.callHistory.flush(true)
 
-      await screen.findByRole('link', { name: 'Contact sales' })
+      expect(screen.queryByRole('link', { name: 'Contact sales' })).to.be.null
     })
 
-    it('does not show the banner for users that have dismissed the banner within the last 30 days', async function () {
-      const dismissed = new Date()
-      dismissed.setDate(dismissed.getDate() - 29) // 29 days
-      window.metaAttributesCache.set('ol-showGroupsAndEnterpriseBanner', true)
-      localStorage.setItem(
-        'has_dismissed_groups_and_enterprise_banner',
-        dismissed
+    it('shows the banner for users who have not dismissed the repeat appearance', async function () {
+      window.metaAttributesCache.set(
+        'ol-inactiveTutorials',
+        '["groups-enterprise-banner"]'
       )
+      window.metaAttributesCache.set('ol-showGroupsAndEnterpriseBanner', true)
+
+      renderWithinProjectListProvider(GroupsAndEnterpriseBanner)
+      await fetchMock.callHistory.flush(true)
+
+      expect(screen.queryByRole('link', { name: 'Contact sales' })).to.be.null
+    })
+
+    it('does not show the banner for users with both inactive tutorials', async function () {
+      window.metaAttributesCache.set(
+        'ol-inactiveTutorials',
+        '["groups-enterprise-banner", "groups-enterprise-banner-repeat"]'
+      )
+      window.metaAttributesCache.set('ol-showGroupsAndEnterpriseBanner', true)
 
       renderWithinProjectListProvider(GroupsAndEnterpriseBanner)
       await fetchMock.callHistory.flush(true)
@@ -1041,6 +1092,18 @@ describe('<UserNotifications />', function () {
       expect(
         screen.queryByText('Success! Single sign-on is all set up for you.')
       ).to.be.null
+    })
+
+    it('shows group SSO linked notification when joining via domain capture', function () {
+      const groupName = 'Group Name'
+      window.metaAttributesCache.set('ol-groupSsoSetupSuccess', true)
+      window.metaAttributesCache.set('ol-viaDomainCapture', true)
+      window.metaAttributesCache.set('ol-joinedGroupName', groupName)
+      renderWithinProjectListProvider(GroupSsoSetupSuccess)
+      const alert = screen.getByRole('alert')
+      expect(alert.textContent).to.contain(
+        `Success! You’ve joined the ${groupName} group subscription. Your group has SSO enabled.`
+      )
     })
   })
 })

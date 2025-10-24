@@ -387,6 +387,7 @@ module.exports = {
   adminUrl: process.env.ADMIN_URL,
   adminOnlyLogin: process.env.ADMIN_ONLY_LOGIN === 'true',
   adminPrivilegeAvailable: process.env.ADMIN_PRIVILEGE_AVAILABLE === 'true',
+  adminRolesEnabled: false,
   blockCrossOriginRequests: process.env.BLOCK_CROSS_ORIGIN_REQUESTS === 'true',
   allowedOrigins: (process.env.ALLOWED_ORIGINS || siteUrl).split(','),
 
@@ -431,6 +432,7 @@ module.exports = {
   ],
 
   disableChat: process.env.OVERLEAF_DISABLE_CHAT === 'true',
+  disableLinkSharing: process.env.OVERLEAF_DISABLE_LINK_SHARING === 'true',
   enableSubscriptions: false,
   restrictedCountries: [],
   enableOnboardingEmails: process.env.ENABLE_ONBOARDING_EMAILS === 'true',
@@ -657,7 +659,8 @@ module.exports = {
   // If you are running Overleaf behind a proxy (like Apache, Nginx, etc)
   // then set this to true to allow it to correctly detect the forwarded IP
   // address and http/https protocol information.
-  behindProxy: false,
+  behindProxy: true,
+  trustedProxyIps: process.env.TRUSTED_PROXY_IPS || 'loopback',
 
   // Delay before closing the http server upon receiving a SIGTERM process signal.
   gracefulShutdownDelayInMs:
@@ -705,17 +708,29 @@ module.exports = {
 
   primary_email_check_expiration: 1000 * 60 * 60 * 24 * 90, // 90 days
 
+  userHardDeletionDelay:
+    parseInt(process.env.OVERLEAF_USER_HARD_DELETION_DELAY, 10) ||
+    1000 * 60 * 60 * 24 * 90, // 90 days
+  projectHardDeletionDelay:
+    parseInt(process.env.OVERLEAF_PROJECT_HARD_DELETION_DELAY, 10) ||
+    1000 * 60 * 60 * 24 * 90, // 90 days
+
+  // Delay before sending comment mention notifications
+  commentMentionDelay:
+    parseInt(process.env.COMMENT_MENTION_DELAY_MINUTES) || 30 * 60 * 1000, // 30 minutes
+
   // Maximum JSON size in HTTP requests
   // We should be able to process twice the max doc length, to allow for
   //   - the doc content
   //   - text ranges spanning the whole doc
   //
-  // There's also overhead required for the JSON encoding and the UTF-8 encoding,
-  // theoretically up to 3 times the max doc length. On the other hand, we don't
-  // want to block the event loop with JSON parsing, so we try to find a
-  // practical compromise.
+  // There's also overhead required for the JSON encoding and the UTF-8
+  // encoding, theoretically up to 6 times the max doc length (e.g. a document
+  // entirely filled with "\u0011" characters). On the other hand, we don't want
+  // to block the event loop with JSON parsing, so we try to find a practical
+  // compromise.
   max_json_request_size:
-    parseInt(process.env.MAX_JSON_REQUEST_SIZE) || 6 * 1024 * 1024, // 6 MB
+    parseInt(process.env.MAX_JSON_REQUEST_SIZE) || 12 * 1024 * 1024, // 12 MB
 
   // Internal configs
   // ----------------
@@ -767,8 +782,7 @@ module.exports = {
 
     right_footer: [
       {
-        text: "<i class='fa fa-github-square'></i> Fork on GitHub!",
-        url: 'https://github.com/overleaf/overleaf',
+        text: '<a href="https://github.com/overleaf/overleaf">Fork on GitHub!</a>',
       },
     ],
 
@@ -806,7 +820,10 @@ module.exports = {
     '/templates/index': '/templates/',
   },
 
-  reloadModuleViewsOnEachRequest: process.env.NODE_ENV === 'development',
+  enablePugCache: process.env.ENABLE_PUG_CACHE === 'true',
+  reloadModuleViewsOnEachRequest:
+    process.env.ENABLE_PUG_CACHE !== 'true' &&
+    process.env.NODE_ENV === 'development',
 
   rateLimit: {
     subnetRateLimiterDisabled:
@@ -965,7 +982,6 @@ module.exports = {
     tprFileViewRefreshButton: [],
     tprFileViewNotOriginalImporter: [],
     contactUsModal: [],
-    editorToolbarButtons: [],
     sourceEditorExtensions: [],
     sourceEditorComponents: [],
     pdfLogEntryHeaderActionComponents: [],
@@ -992,17 +1008,34 @@ module.exports = {
     v1ImportDataScreen: [],
     snapshotUtils: [],
     usGovBanner: [],
+    rollingBuildsUpdatedAlert: [],
     offlineModeToolbarButtons: [],
     settingsEntries: [],
     autoCompleteExtensions: [],
     sectionTitleGenerators: [],
-    toastGenerators: [],
-    editorSidebarComponents: [],
-    fileTreeToolbarComponents: [],
+    toastGenerators: [
+      Path.resolve(
+        __dirname,
+        '../frontend/js/features/pdf-preview/components/synctex-toasts'
+      ),
+    ],
+    editorSidebarComponents: [
+      Path.resolve(
+        __dirname,
+        '../modules/full-project-search/frontend/js/components/full-project-search.tsx'
+      ),
+    ],
+    fileTreeToolbarComponents: [
+      Path.resolve(
+        __dirname,
+        '../modules/full-project-search/frontend/js/components/full-project-search-button.tsx'
+      ),
+    ],
     fullProjectSearchPanel: [],
     integrationPanelComponents: [],
     referenceSearchSetting: [],
     errorLogsComponents: [],
+    referenceIndices: [],
   },
 
   moduleImportSequence: [

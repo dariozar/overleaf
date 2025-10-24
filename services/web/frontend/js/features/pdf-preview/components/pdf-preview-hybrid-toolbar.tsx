@@ -1,6 +1,6 @@
 import { memo, useState, useEffect, useRef } from 'react'
-import OlButtonToolbar from '@/features/ui/components/ol/ol-button-toolbar'
 import { useTranslation } from 'react-i18next'
+import OLButtonToolbar from '@/shared/components/ol/ol-button-toolbar'
 import { useLayoutContext } from '@/shared/context/layout-context'
 import PdfCompileButton from './pdf-compile-button'
 import SwitchToEditorButton from './switch-to-editor-button'
@@ -9,13 +9,13 @@ import PdfHybridDownloadButton from './pdf-hybrid-download-button'
 import PdfHybridCodeCheckButton from './pdf-hybrid-code-check-button'
 import PdfOrphanRefreshButton from './pdf-orphan-refresh-button'
 import { DetachedSynctexControl } from './detach-synctex-control'
-import { Spinner } from 'react-bootstrap'
+import LoadingSpinner from '@/shared/components/loading-spinner'
 
 const ORPHAN_UI_TIMEOUT_MS = 5000
 
 function PdfPreviewHybridToolbar() {
   const { detachRole, detachIsLinked } = useLayoutContext()
-
+  const { t } = useTranslation()
   const uiTimeoutRef = useRef<number>()
   const [orphanPdfTabAfterDelay, setOrphanPdfTabAfterDelay] = useState(false)
 
@@ -47,9 +47,12 @@ function PdfPreviewHybridToolbar() {
   }
 
   return (
-    <OlButtonToolbar className="toolbar toolbar-pdf toolbar-pdf-hybrid">
+    <OLButtonToolbar
+      className="toolbar toolbar-pdf toolbar-pdf-hybrid"
+      aria-label={t('pdf')}
+    >
       {ToolbarInner}
-    </OlButtonToolbar>
+    </OLButtonToolbar>
   )
 }
 
@@ -88,14 +91,7 @@ function PdfPreviewHybridToolbarConnectingInner() {
   return (
     <>
       <div className="toolbar-pdf-orphan">
-        <Spinner
-          animation="border"
-          aria-hidden="true"
-          size="sm"
-          role="status"
-        />
-        &nbsp;
-        {t('tab_connecting')}…
+        <LoadingSpinner size="sm" loadingText={`${t('tab_connecting')}…`} />
       </div>
     </>
   )

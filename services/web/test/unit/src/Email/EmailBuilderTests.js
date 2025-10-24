@@ -62,6 +62,31 @@ describe('EmailBuilder', function () {
       })
     })
 
+    describe('when dealing with escaping', function () {
+      it("should not show possessive 's as &#39;", function () {
+        this.opts.project.name = "Aktöbe's project"
+        this.email = this.EmailBuilder.buildEmail('projectInvite', this.opts)
+        expect(this.email.subject).to.not.contain('&#39;')
+        expect(this.email.subject).to.contain(this.opts.project.name)
+      })
+
+      it('should not show an ampersand as &amp;', function () {
+        this.opts.project.name = 'Aktöbe & Almaty project'
+        this.email = this.EmailBuilder.buildEmail('projectInvite', this.opts)
+        expect(this.email.subject).to.not.contain('&amp;')
+        expect(this.email.subject).to.contain(this.opts.project.name)
+      })
+
+      it('should prevent dangerous characters as project names', function () {
+        const characters = ['""', '<>', '//']
+        for (const pair of characters) {
+          this.opts.project.name = `${pair} project`
+          this.email = this.EmailBuilder.buildEmail('projectInvite', this.opts)
+          expect(this.email.subject).to.not.contain(pair)
+        }
+      })
+    })
+
     describe('when someone is up to no good', function () {
       it('should not contain the project name at all if unsafe', function () {
         this.opts.project.name = "<img src='http://evilsite.com/evil.php'>"
@@ -852,6 +877,57 @@ describe('EmailBuilder', function () {
         describe('plain text email', function () {
           it('should include URLs', function () {
             expect(this.email.text).to.contain(this.passwordResetUrl)
+          })
+        })
+      })
+
+      describe('taxExemptCertificateRequired', function () {
+        beforeEach(function () {
+          this.emailAddress = 'customer@example.com'
+          this.opts = {
+            to: this.emailAddress,
+            ein: '12-3456789',
+            stripeCustomerId: 'cus_123456789',
+          }
+          this.email = this.EmailBuilder.buildEmail(
+            'taxExemptCertificateRequired',
+            this.opts
+          )
+          this.dom = cheerio.load(this.email.html)
+        })
+
+        it('should build the email', function () {
+          expect(this.email.html).to.exist
+          expect(this.email.text).to.exist
+        })
+
+        describe('HTML email', function () {
+          it('should include the EIN', function () {
+            expect(this.email.html).to.contain(this.opts.ein)
+          })
+
+          it('should include the Stripe customer ID', function () {
+            expect(this.email.html).to.contain(this.opts.stripeCustomerId)
+          })
+
+          it('should include tax exemption verification text', function () {
+            expect(this.email.html).to.contain('tax exempt')
+            expect(this.email.html).to.contain('verification')
+          })
+        })
+
+        describe('plain text email', function () {
+          it('should include the EIN', function () {
+            expect(this.email.text).to.contain(this.opts.ein)
+          })
+
+          it('should include the Stripe customer ID', function () {
+            expect(this.email.text).to.contain(this.opts.stripeCustomerId)
+          })
+
+          it('should include tax exemption verification text', function () {
+            expect(this.email.text).to.contain('tax exempt')
+            expect(this.email.text).to.contain('verification')
           })
         })
       })

@@ -1,15 +1,16 @@
 import { ReactNode, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import OLBadge from '@/features/ui/components/ol/ol-badge'
-import OLTooltip from '@/features/ui/components/ol/ol-tooltip'
+import OLBadge from '@/shared/components/ol/ol-badge'
+import OLTooltip from '@/shared/components/ol/ol-tooltip'
 import { postJSON } from '@/infrastructure/fetch-json'
-import OLButton from '@/features/ui/components/ol/ol-button'
+import OLButton from '@/shared/components/ol/ol-button'
 import getMeta from '@/utils/meta'
 
 type IntegrationLinkingWidgetProps = {
   logo: ReactNode
   title: string
-  description: string
+  description: string | ReactNode
+  optedInDescription?: string | ReactNode
   helpPath?: string
   labsEnabled?: boolean
   experimentName: string
@@ -18,10 +19,12 @@ type IntegrationLinkingWidgetProps = {
   setOptedIn: (optedIn: boolean) => void
 }
 
+/** @knipignore */
 export function LabsExperimentWidget({
   logo,
   title,
   description,
+  optedInDescription,
   helpPath,
   labsEnabled,
   experimentName,
@@ -69,7 +72,7 @@ export function LabsExperimentWidget({
           {optedIn && <OLBadge bg="info">{t('enabled')}</OLBadge>}
         </div>
         <p className="small">
-          {description}{' '}
+          {optedIn && optedInDescription ? optedInDescription : description}{' '}
           {helpPath && (
             <a href={helpPath} target="_blank" rel="noreferrer">
               {t('learn_more')}

@@ -1,23 +1,32 @@
 import { useCallback } from 'react'
-import OLButton from '../ui/components/ol/ol-button'
+import OLButton from '../../shared/components/ol/ol-button'
 import { useIdeRedesignSwitcherContext } from '../ide-react/context/ide-redesign-switcher-context'
-import MaterialIcon from '@/shared/components/material-icon'
 import { useTranslation } from 'react-i18next'
+import { canUseNewEditorViaPrimaryFeatureFlag } from '../ide-redesign/utils/new-editor-utils'
+import { useSwitchEnableNewEditorState } from '../ide-redesign/hooks/use-switch-enable-new-editor-state'
 
 const TryNewEditorButton = () => {
   const { t } = useTranslation()
   const { setShowSwitcherModal } = useIdeRedesignSwitcherContext()
+  const showModal = canUseNewEditorViaPrimaryFeatureFlag()
+  const { loading, setEditorRedesignStatus } = useSwitchEnableNewEditorState()
+
   const onClick = useCallback(() => {
-    setShowSwitcherModal(true)
-  }, [setShowSwitcherModal])
+    if (showModal) {
+      setShowSwitcherModal(true)
+    } else {
+      setEditorRedesignStatus(true)
+    }
+  }, [setShowSwitcherModal, showModal, setEditorRedesignStatus])
+
   return (
     <div className="d-flex align-items-center">
       <OLButton
         className="toolbar-experiment-button"
         onClick={onClick}
         size="sm"
-        leadingIcon={<MaterialIcon type="experiment" unfilled />}
         variant="secondary"
+        isLoading={loading}
       >
         {t('try_the_new_editor')}
       </OLButton>

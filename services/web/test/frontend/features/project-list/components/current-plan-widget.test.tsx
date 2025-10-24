@@ -83,6 +83,33 @@ describe('<CurrentPlanWidget />', function () {
     })
   })
 
+  describe('free plan with Personal plan name', function () {
+    beforeEach(function () {
+      window.metaAttributesCache.set('ol-usersBestSubscription', {
+        type: 'individual',
+        plan: {
+          name: 'Free',
+        },
+        subscription: {
+          planCode: 'personal',
+          name: 'Free',
+        },
+        featuresPageURL: '/features',
+      })
+
+      render(<CurrentPlanWidget />)
+    })
+
+    it('shows text and tooltip on mouseover', async function () {
+      const link = screen.getByRole('link', {
+        name: /you’re on the free plan/i,
+      })
+      fireEvent.mouseOver(link)
+
+      await screen.findByRole('tooltip', { name: freePlanTooltipMessage })
+    })
+  })
+
   describe('paid plan', function () {
     describe('trial', function () {
       const subscription = {
@@ -312,8 +339,6 @@ describe('<CurrentPlanWidget />', function () {
         expect(links[0].getAttribute('href')).to.equal(
           '/learn/how-to/Overleaf_premium_features'
         )
-
-        fireEvent.click(links[0])
 
         window.metaAttributesCache.delete('ol-usersBestSubscription')
       })

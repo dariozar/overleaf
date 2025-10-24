@@ -9,25 +9,22 @@ import { CodemirrorOutline } from './codemirror-outline'
 import { CodeMirrorCommandTooltip } from './codemirror-command-tooltip'
 import importOverleafModules from '../../../../macros/import-overleaf-module.macro'
 import { FigureModal } from './figure-modal/figure-modal'
-import { ReviewPanelProviders } from '@/features/review-panel-new/context/review-panel-providers'
-import { ReviewPanelNew } from '@/features/review-panel-new/components/review-panel-new'
-import ReviewTooltipMenu from '@/features/review-panel-new/components/review-tooltip-menu'
+import { ReviewPanelProviders } from '@/features/review-panel/context/review-panel-providers'
+import { ReviewPanelRoot } from '@/features/review-panel/components/review-panel-root'
+import ReviewTooltipMenu from '@/features/review-panel/components/review-tooltip-menu'
 import {
   CodeMirrorStateContext,
   CodeMirrorViewContext,
 } from './codemirror-context'
 import MathPreviewTooltip from './math-preview-tooltip'
 import { useToolbarMenuBarEditorCommands } from '@/features/ide-redesign/hooks/use-toolbar-menu-editor-commands'
+import { useProjectContext } from '@/shared/context/project-context'
 
 // TODO: remove this when definitely no longer used
 export * from './codemirror-context'
 
 const sourceEditorComponents = importOverleafModules(
   'sourceEditorComponents'
-) as { import: { default: ElementType }; path: string }[]
-
-const sourceEditorToolbarComponents = importOverleafModules(
-  'sourceEditorToolbarComponents'
 ) as { import: { default: ElementType }; path: string }[]
 
 function CodeMirrorEditor() {
@@ -67,6 +64,7 @@ function CodeMirrorEditor() {
 
 function CodeMirrorEditorComponents() {
   useToolbarMenuBarEditorCommands()
+  const { features } = useProjectContext()
 
   return (
     <ReviewPanelProviders>
@@ -75,16 +73,11 @@ function CodeMirrorEditorComponents() {
       <FigureModal />
       <CodeMirrorSearch />
       <CodeMirrorToolbar />
-      {sourceEditorToolbarComponents.map(
-        ({ import: { default: Component }, path }) => (
-          <Component key={path} />
-        )
-      )}
       <CodeMirrorCommandTooltip />
 
       <MathPreviewTooltip />
-      <ReviewTooltipMenu />
-      <ReviewPanelNew />
+      {features.trackChangesVisible && <ReviewTooltipMenu />}
+      {features.trackChangesVisible && <ReviewPanelRoot />}
 
       {sourceEditorComponents.map(
         ({ import: { default: Component }, path }) => (

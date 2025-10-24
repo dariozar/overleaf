@@ -1,6 +1,63 @@
 const { formatCurrency } = require('../../util/currency')
 const GroupPlansData = require('./GroupPlansData')
-const { isStandaloneAiAddOnPlanCode } = require('./PaymentProviderEntities')
+const { isStandaloneAiAddOnPlanCode } = require('./AiHelper')
+const { Subscription } = require('../../models/Subscription')
+
+const MILLISECONDS = 1_000
+/**
+ * Recompute the subscription state for Stripe subscriptions based on pause periods.
+ * This function checks if a subscription should transition between 'active' and 'paused'
+ * states based on the current time and pause period metadata.
+ *
+ * @param {Object} subscription - The MongoDB subscription document
+ * @returns {Promise<Object>} - The updated subscription document with recomputed state
+ */
+async function recomputeSubscriptionState(subscription) {
+  if (
+    !subscription?.paymentProvider?.subscriptionId ||
+    !subscription.paymentProvider.pausePeriodStart ||
+    !subscription.paymentProvider.pausePeriodEnd ||
+    !subscription?.paymentProvider.service.includes('stripe')
+  ) {
+    return subscription
+  }
+  const now = Date.now() / MILLISECONDS
+  const pauseStartTime =
+    new Date(subscription.paymentProvider.pausePeriodStart).getTime() /
+    MILLISECONDS
+  const currentState = subscription.paymentProvider.state
+
+  const pauseEndTime =
+    new Date(subscription.paymentProvider.pausePeriodEnd).getTime() /
+    MILLISECONDS
+
+  const shouldBePaused =
+    pauseEndTime && now >= pauseStartTime && now < pauseEndTime
+
+  let newState
+
+  if (shouldBePaused && currentState !== 'paused') {
+    newState = 'paused'
+  } else if (
+    !shouldBePaused &&
+    currentState === 'paused' &&
+    pauseEndTime &&
+    now >= pauseEndTime
+  ) {
+    newState = 'active'
+  }
+
+  if (newState) {
+    await Subscription.updateOne(
+      { _id: subscription._id },
+      { 'paymentProvider.state': newState }
+    ).exec()
+
+    subscription.paymentProvider.state = newState
+  }
+
+  return subscription
+}
 
 /**
  * If the user changes to a less expensive plan, we shouldn't apply the change immediately.
@@ -24,17 +81,6 @@ function shouldPlanChangeAtTermEnd(oldPlan, newPlan, isInTrial) {
 }
 
 /**
- * This is duplicated in:
- *   - services/web/scripts/plan-prices/plans.mjs
- *   - services/web/modules/subscriptions/frontend/js/pages/plans/group-member-picker/group-plan-pricing.js
- * @param {number} number
- * @returns {number}
- */
-function roundUpToNearest5Cents(number) {
-  return Math.ceil(number * 20) / 20
-}
-
-/**
  * @import { CurrencyCode } from '../../../../types/subscription/currency'
  */
 
@@ -48,7 +94,6 @@ function roundUpToNearest5Cents(number) {
  * @typedef {Object} LocalizedGroupPrice
  * @property {PlanToPrice} price
  * @property {PlanToPrice} pricePerUser
- * @property {PlanToPrice} pricePerUserPerMonth
  */
 
 /**
@@ -65,17 +110,11 @@ function generateInitialLocalizedGroupPrice(recommendedCurrency, locale) {
       INITIAL_LICENSE_SIZE
     ].price_in_cents / 100
   const collaboratorPricePerUser = collaboratorPrice / INITIAL_LICENSE_SIZE
-  const collaboratorPricePerUserPerMonth = roundUpToNearest5Cents(
-    collaboratorPrice / INITIAL_LICENSE_SIZE / 12
-  )
   const professionalPrice =
     GroupPlansData.enterprise.professional[recommendedCurrency][
       INITIAL_LICENSE_SIZE
     ].price_in_cents / 100
   const professionalPricePerUser = professionalPrice / INITIAL_LICENSE_SIZE
-  const professionalPricePerUserPerMonth = roundUpToNearest5Cents(
-    professionalPrice / INITIAL_LICENSE_SIZE / 12
-  )
 
   /**
    * @param {number} price
@@ -92,10 +131,6 @@ function generateInitialLocalizedGroupPrice(recommendedCurrency, locale) {
     pricePerUser: {
       collaborator: formatPrice(collaboratorPricePerUser),
       professional: formatPrice(professionalPricePerUser),
-    },
-    pricePerUserPerMonth: {
-      collaborator: formatPrice(collaboratorPricePerUserPerMonth),
-      professional: formatPrice(professionalPricePerUserPerMonth),
     },
   }
 }
@@ -171,4 +206,5 @@ module.exports = {
   getSubscriptionTrialStartedAt,
   getSubscriptionTrialEndsAt,
   isInTrial,
+  recomputeSubscriptionState,
 }

@@ -2,11 +2,11 @@ import logger from '@overleaf/logger'
 import metrics from '@overleaf/metrics'
 import fs from 'node:fs'
 import Path from 'node:path'
-import FileSystemImportManager from './FileSystemImportManager.js'
-import ProjectUploadManager from './ProjectUploadManager.js'
+import FileSystemImportManager from './FileSystemImportManager.mjs'
+import ProjectUploadManager from './ProjectUploadManager.mjs'
 import SessionManager from '../Authentication/SessionManager.js'
-import EditorController from '../Editor/EditorController.js'
-import ProjectLocator from '../Project/ProjectLocator.js'
+import EditorController from '../Editor/EditorController.mjs'
+import ProjectLocator from '../Project/ProjectLocator.mjs'
 import Settings from '@overleaf/settings'
 import { InvalidZipFileError } from './ArchiveErrors.js'
 import multer from 'multer'
@@ -66,7 +66,7 @@ function uploadProject(req, res, next) {
 async function uploadFile(req, res, next) {
   const timer = new metrics.Timer('file-upload')
   const name = req.body.name
-  const path = req.file?.path
+  const { path } = req.file
   const projectId = req.params.Project_id
   const userId = SessionManager.getLoggedInUserId(req.session)
   let { folder_id: folderId } = req.query
@@ -162,8 +162,14 @@ function multerMiddleware(req, res, next) {
         .status(422)
         .json({ success: false, error: req.i18n.translate('file_too_large') })
     }
-
-    return next(err)
+    if (err) return next(err)
+    if (!req.file?.path) {
+      logger.info({ req }, 'missing req.file.path on upload')
+      return res
+        .status(400)
+        .json({ success: false, error: 'invalid_upload_request' })
+    }
+    next()
   })
 }
 

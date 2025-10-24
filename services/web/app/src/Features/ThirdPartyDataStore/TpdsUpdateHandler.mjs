@@ -1,12 +1,12 @@
 import { callbackify } from 'node:util'
-import UpdateMerger from './UpdateMerger.js'
+import UpdateMerger from './UpdateMerger.mjs'
 import logger from '@overleaf/logger'
 import NotificationsBuilder from '../Notifications/NotificationsBuilder.js'
-import ProjectCreationHandler from '../Project/ProjectCreationHandler.js'
-import ProjectDeleter from '../Project/ProjectDeleter.js'
-import ProjectGetter from '../Project/ProjectGetter.js'
+import ProjectCreationHandler from '../Project/ProjectCreationHandler.mjs'
+import ProjectDeleter from '../Project/ProjectDeleter.mjs'
+import ProjectGetter from '../Project/ProjectGetter.mjs'
 import ProjectHelper from '../Project/ProjectHelper.js'
-import ProjectRootDocManager from '../Project/ProjectRootDocManager.js'
+import ProjectRootDocManager from '../Project/ProjectRootDocManager.mjs'
 import FileTypeManager from '../Uploads/FileTypeManager.js'
 import CooldownManager from '../Cooldown/CooldownManager.js'
 import Errors from '../Errors/Errors.js'
@@ -31,7 +31,7 @@ async function newUpdate(
     throw new Errors.TooManyRequestsError('project on cooldown')
   }
 
-  const shouldIgnore = await FileTypeManager.promises.shouldIgnore(path)
+  const shouldIgnore = FileTypeManager.shouldIgnore(path)
   if (shouldIgnore) {
     return null
   }
@@ -175,7 +175,7 @@ async function createFolder(userId, projectId, projectName, path) {
     throw new Errors.TooManyRequestsError('project on cooldown')
   }
 
-  const shouldIgnore = await FileTypeManager.promises.shouldIgnore(path)
+  const shouldIgnore = FileTypeManager.shouldIgnore(path)
   if (shouldIgnore) {
     return null
   }

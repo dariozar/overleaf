@@ -8,13 +8,14 @@ import NotificationScrolledTo from '@/shared/components/notification-scrolled-to
 import { debugConsole } from '@/utils/debugging'
 import { GroupUserAlert } from '../../utils/types'
 import { useGroupMembersContext } from '../../context/group-members-context'
-import OLModal, {
+import {
+  OLModal,
   OLModalBody,
   OLModalFooter,
   OLModalHeader,
   OLModalTitle,
-} from '@/features/ui/components/ol/ol-modal'
-import OLButton from '@/features/ui/components/ol/ol-button'
+} from '@/shared/components/ol/ol-modal'
+import OLButton from '@/shared/components/ol/ol-button'
 
 export type UnlinkUserModalProps = {
   onClose: () => void

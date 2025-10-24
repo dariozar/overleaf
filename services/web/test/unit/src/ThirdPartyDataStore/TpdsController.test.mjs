@@ -33,7 +33,9 @@ describe('TpdsController', function () {
       },
     }
     ctx.NotificationsBuilder = {
-      tpdsFileLimit: sinon.stub().returns({ create: sinon.stub() }),
+      promises: {
+        tpdsFileLimit: sinon.stub().returns({ create: sinon.stub() }),
+      },
     }
     ctx.SessionManager = {
       getLoggedInUserId: sinon.stub().returns('user-id'),
@@ -116,8 +118,8 @@ describe('TpdsController', function () {
   })
 
   describe('creating a project', function () {
-    it('should yield the new projects id', function (ctx) {
-      return new Promise(resolve => {
+    it('should yield the new projects id', async function (ctx) {
+      await new Promise(resolve => {
         const res = new MockResponse()
         const req = new MockRequest()
         req.params.user_id = ctx.user_id
@@ -161,8 +163,8 @@ describe('TpdsController', function () {
       }
     })
 
-    it('should process the update with the update receiver by name', function (ctx) {
-      return new Promise(resolve => {
+    it('should process the update with the update receiver by name', async function (ctx) {
+      await new Promise(resolve => {
         const res = {
           json: payload => {
             expect(payload).to.deep.equal({
@@ -190,8 +192,8 @@ describe('TpdsController', function () {
       })
     })
 
-    it('should indicate in the response when the update was rejected', function (ctx) {
-      return new Promise(resolve => {
+    it('should indicate in the response when the update was rejected', async function (ctx) {
+      await new Promise(resolve => {
         ctx.TpdsUpdateHandler.promises.newUpdate.resolves(null)
         const res = {
           json: payload => {
@@ -203,8 +205,8 @@ describe('TpdsController', function () {
       })
     })
 
-    it('should process the update with the update receiver by id', function (ctx) {
-      return new Promise(resolve => {
+    it('should process the update with the update receiver by id', async function (ctx) {
+      await new Promise(resolve => {
         const path = '/here.txt'
         const req = {
           pause() {},
@@ -233,8 +235,8 @@ describe('TpdsController', function () {
       })
     })
 
-    it('should return a 500 error when the update receiver fails', function (ctx) {
-      return new Promise(resolve => {
+    it('should return a 500 error when the update receiver fails', async function (ctx) {
+      await new Promise(resolve => {
         ctx.TpdsUpdateHandler.promises.newUpdate.rejects(new Error())
         const res = {
           json: sinon.stub(),
@@ -247,15 +249,15 @@ describe('TpdsController', function () {
       })
     })
 
-    it('should return a 400 error when the project is too big', function (ctx) {
-      return new Promise(resolve => {
+    it('should return a 400 error when the project is too big', async function (ctx) {
+      await new Promise(resolve => {
         ctx.TpdsUpdateHandler.promises.newUpdate.rejects({
           message: 'project_has_too_many_files',
         })
         const res = {
           sendStatus: status => {
             expect(status).to.equal(400)
-            ctx.NotificationsBuilder.tpdsFileLimit.should.have.been.calledWith(
+            ctx.NotificationsBuilder.promises.tpdsFileLimit.should.have.been.calledWith(
               ctx.user_id
             )
             resolve()
@@ -265,8 +267,8 @@ describe('TpdsController', function () {
       })
     })
 
-    it('should return a 429 error when the update receiver fails due to too many requests error', function (ctx) {
-      return new Promise(resolve => {
+    it('should return a 429 error when the update receiver fails due to too many requests error', async function (ctx) {
+      await new Promise(resolve => {
         ctx.TpdsUpdateHandler.promises.newUpdate.rejects(
           new Errors.TooManyRequestsError('project on cooldown')
         )
@@ -282,8 +284,8 @@ describe('TpdsController', function () {
   })
 
   describe('getting a delete update', function () {
-    it('should process the delete with the update receiver by name', function (ctx) {
-      return new Promise(resolve => {
+    it('should process the delete with the update receiver by name', async function (ctx) {
+      await new Promise(resolve => {
         const path = '/projectName/here.txt'
         const req = {
           params: { 0: path, user_id: ctx.user_id, project_id: '' },
@@ -312,8 +314,8 @@ describe('TpdsController', function () {
       })
     })
 
-    it('should process the delete with the update receiver by id', function (ctx) {
-      return new Promise(resolve => {
+    it('should process the delete with the update receiver by id', async function (ctx) {
+      await new Promise(resolve => {
         const path = '/here.txt'
         const req = {
           params: { 0: path, user_id: ctx.user_id, project_id: '123' },
@@ -351,8 +353,8 @@ describe('TpdsController', function () {
       }
     })
 
-    it("creates a folder if it doesn't exist", function (ctx) {
-      return new Promise(resolve => {
+    it("creates a folder if it doesn't exist", async function (ctx) {
+      await new Promise(resolve => {
         const metadata = {
           folderId: new ObjectId(),
           projectId: new ObjectId(),
@@ -373,8 +375,8 @@ describe('TpdsController', function () {
       })
     })
 
-    it('supports top level folders', function (ctx) {
-      return new Promise(resolve => {
+    it('supports top level folders', async function (ctx) {
+      await new Promise(resolve => {
         const metadata = {
           folderId: new ObjectId(),
           projectId: new ObjectId(),
@@ -395,8 +397,8 @@ describe('TpdsController', function () {
       })
     })
 
-    it("returns a 409 if the folder couldn't be created", function (ctx) {
-      return new Promise(resolve => {
+    it("returns a 409 if the folder couldn't be created", async function (ctx) {
+      await new Promise(resolve => {
         ctx.TpdsUpdateHandler.promises.createFolder.resolves(null)
         ctx.HttpErrorHandler.conflict.callsFake((req, res) => {
           expect(req).to.equal(ctx.req)
@@ -523,8 +525,8 @@ describe('TpdsController', function () {
     })
 
     describe('success', function () {
-      beforeEach(function (ctx) {
-        return new Promise(resolve => {
+      beforeEach(async function (ctx) {
+        await new Promise(resolve => {
           ctx.res.json.callsFake(() => {
             resolve()
           })
@@ -546,8 +548,8 @@ describe('TpdsController', function () {
     })
 
     describe('error', function () {
-      beforeEach(function (ctx) {
-        return new Promise(resolve => {
+      beforeEach(async function (ctx) {
+        await new Promise(resolve => {
           ctx.err = new Error()
           ctx.TpdsQueueManager.promises.getQueues = sinon
             .stub()

@@ -1,3 +1,5 @@
+import logger from '@overleaf/logger'
+import sinon from 'sinon'
 import User from './helpers/User.mjs'
 import Subscription from './helpers/Subscription.mjs'
 import request from './helpers/request.js'
@@ -7,20 +9,16 @@ import settings from '@overleaf/settings'
 import { db, ObjectId } from '../../../app/src/infrastructure/mongodb.js'
 import Features from '../../../app/src/infrastructure/Features.js'
 import MockDocstoreApiClass from './mocks/MockDocstoreApi.mjs'
-import MockFilestoreApiClass from './mocks/MockFilestoreApi.mjs'
 import MockChatApiClass from './mocks/MockChatApi.mjs'
 import MockGitBridgeApiClass from './mocks/MockGitBridgeApi.mjs'
 import MockHistoryBackupDeletionApiClass from './mocks/MockHistoryBackupDeletionApi.mjs'
 
-let MockDocstoreApi,
-  MockFilestoreApi,
-  MockChatApi,
-  MockGitBridgeApi,
-  MockHistoryBackupDeletionApi
+let MockDocstoreApi, MockChatApi, MockGitBridgeApi, MockHistoryBackupDeletionApi
+
+let spy
 
 before(function () {
   MockDocstoreApi = MockDocstoreApiClass.instance()
-  MockFilestoreApi = MockFilestoreApiClass.instance()
   MockChatApi = MockChatApiClass.instance()
   MockGitBridgeApi = MockGitBridgeApiClass.instance()
   MockHistoryBackupDeletionApi = MockHistoryBackupDeletionApiClass.instance()
@@ -28,6 +26,7 @@ before(function () {
 
 describe('Deleting a user', function () {
   beforeEach(function (done) {
+    spy = sinon.spy(logger, 'info')
     async.auto(
       {
         user: cb => {
@@ -62,6 +61,10 @@ describe('Deleting a user', function () {
         done()
       }
     )
+  })
+
+  afterEach(function () {
+    spy.restore()
   })
 
   it('Should remove the user from active users', function (done) {
@@ -183,6 +186,7 @@ describe('Deleting a user', function () {
 
 describe('Deleting a project', function () {
   beforeEach(function (done) {
+    spy = sinon.spy(logger, 'info')
     this.user = new User()
     this.projectName = 'wombat'
     this.user.ensureUserExists(() => {
@@ -193,6 +197,10 @@ describe('Deleting a project', function () {
         })
       })
     })
+  })
+
+  afterEach(function () {
+    logger.info.restore()
   })
 
   it('Should remove the project from active projects', function (done) {
@@ -270,9 +278,6 @@ describe('Deleting a project', function () {
             done()
           }
         )
-        MockFilestoreApi.files[this.projectId.toString()] = {
-          dummyFile: 'wombat',
-        }
         MockChatApi.projects[this.projectId.toString()] = ['message']
         if (Features.hasFeature('git-bridge')) {
           MockGitBridgeApi.projects[this.projectId.toString()] = {
@@ -290,6 +295,28 @@ describe('Deleting a project', function () {
           }
           done()
         })
+      })
+
+      it('Should log a successful deletion', function (done) {
+        request.post(
+          `/internal/project/${this.projectId}/expire-deleted-project`,
+          {
+            auth: {
+              user: settings.apis.web.user,
+              pass: settings.apis.web.pass,
+              sendImmediately: true,
+            },
+          },
+          (error, res) => {
+            expect(error).not.to.exist
+            expect(res.statusCode).to.equal(200)
+            expect(spy).to.have.been.calledWithMatch(
+              { projectId: this.projectId, userId: this.user._id },
+              'expired deleted project successfully'
+            )
+            done()
+          }
+        )
       })
 
       it('Should destroy the docs', function (done) {
@@ -316,33 +343,6 @@ describe('Deleting a project', function () {
         )
       })
 
-      it('Should destroy the files if filestore is in use', function (done) {
-        expect(MockFilestoreApi.files[this.projectId.toString()]).to.exist
-
-        request.post(
-          `/internal/project/${this.projectId}/expire-deleted-project`,
-          {
-            auth: {
-              user: settings.apis.web.user,
-              pass: settings.apis.web.pass,
-              sendImmediately: true,
-            },
-          },
-          (error, res) => {
-            expect(error).not.to.exist
-            expect(res.statusCode).to.equal(200)
-            if (Features.hasFeature('filestore')) {
-              expect(MockFilestoreApi.files[this.projectId.toString()]).not.to
-                .exist
-            } else {
-              // don't touch files in filestore if it's not in use
-              expect(MockFilestoreApi.files[this.projectId.toString()]).to.exist
-            }
-            done()
-          }
-        )
-      })
-
       it('Should destroy the chat', function (done) {
         expect(MockChatApi.projects[this.projectId.toString()]).to.exist
 
@@ -359,7 +359,8 @@ describe('Deleting a project', function () {
             expect(error).not.to.exist
             expect(res.statusCode).to.equal(200)
 
-            expect(MockChatApi.projects[this.projectId.toString()]).not.to.exist
+            expect(MockChatApi.projects.has(this.projectId.toString())).to.be
+              .false
             done()
           }
         )

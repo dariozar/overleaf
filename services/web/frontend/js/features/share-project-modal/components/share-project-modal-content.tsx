@@ -3,15 +3,16 @@ import { useEditorContext } from '@/shared/context/editor-context'
 import { lazy, Suspense } from 'react'
 import { FullSizeLoadingSpinner } from '@/shared/components/loading-spinner'
 import ClickableElementEnhancer from '@/shared/components/clickable-element-enhancer'
-import OLModal, {
+import {
+  OLModal,
   OLModalBody,
   OLModalFooter,
   OLModalHeader,
   OLModalTitle,
-} from '@/features/ui/components/ol/ol-modal'
-import OLNotification from '@/features/ui/components/ol/ol-notification'
-import OLButton from '@/features/ui/components/ol/ol-button'
-import { Spinner } from 'react-bootstrap'
+} from '@/shared/components/ol/ol-modal'
+import OLNotification from '@/shared/components/ol/ol-notification'
+import OLButton from '@/shared/components/ol/ol-button'
+import OLSpinner from '@/shared/components/ol/ol-spinner'
 
 const ReadOnlyTokenLink = lazy(() =>
   import('./link-sharing').then(({ ReadOnlyTokenLink }) => ({
@@ -43,7 +44,7 @@ export default function ShareProjectModalContent({
 
   return (
     <OLModal show={show} onHide={cancel} animation={animation}>
-      <OLModalHeader closeButton>
+      <OLModalHeader>
         <OLModalTitle>{t('share_project')}</OLModalTitle>
       </OLModalHeader>
 
@@ -67,16 +68,7 @@ export default function ShareProjectModalContent({
       </OLModalBody>
 
       <OLModalFooter>
-        <div className="me-auto">
-          {inFlight && (
-            <Spinner
-              animation="border"
-              aria-hidden="true"
-              size="sm"
-              role="status"
-            />
-          )}
-        </div>
+        <div className="me-auto">{inFlight && <OLSpinner size="sm" />}</div>
 
         <ClickableElementEnhancer
           onClick={cancel}

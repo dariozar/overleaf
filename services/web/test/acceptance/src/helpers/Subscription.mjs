@@ -2,7 +2,7 @@ import { db, ObjectId } from '../../../../app/src/infrastructure/mongodb.js'
 import { expect } from 'chai'
 import { callbackifyClass } from '@overleaf/promise-utils'
 import SubscriptionUpdater from '../../../../app/src/Features/Subscription/SubscriptionUpdater.js'
-import PermissionsManager from '../../../../app/src/Features/Authorization/PermissionsManager.js'
+import PermissionsManager from '../../../../app/src/Features/Authorization/PermissionsManager.mjs'
 import SSOConfigManager from '../../../../modules/group-settings/app/src/sso/SSOConfigManager.mjs'
 import { Subscription as SubscriptionModel } from '../../../../app/src/models/Subscription.js'
 import { DeletedSubscription as DeletedSubscriptionModel } from '../../../../app/src/models/DeletedSubscription.js'
@@ -85,7 +85,14 @@ class PromisifiedSubscription {
   }
 
   async enableManagedUsers() {
-    await Modules.promises.hooks.fire('enableManagedUsers', this._id)
+    await Modules.promises.hooks.fire('enableManagedUsers', this._id, {
+      initiatorId: this.admin_id,
+      ipAddress: '123.456.789.0',
+    })
+  }
+
+  async disableManagedUsers() {
+    await Modules.promises.hooks.fire('disableManagedUsers', this._id)
   }
 
   async enableFeatureSSO() {

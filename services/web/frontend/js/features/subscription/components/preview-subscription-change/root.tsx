@@ -12,16 +12,17 @@ import useAsync from '@/shared/hooks/use-async'
 import { useLocation } from '@/shared/hooks/use-location'
 import { debugConsole } from '@/utils/debugging'
 import { FetchError, postJSON } from '@/infrastructure/fetch-json'
-import Notification from '@/shared/components/notification'
-import OLCard from '@/features/ui/components/ol/ol-card'
-import OLRow from '@/features/ui/components/ol/ol-row'
-import OLCol from '@/features/ui/components/ol/ol-col'
-import OLButton from '@/features/ui/components/ol/ol-button'
+import OLCard from '@/shared/components/ol/ol-card'
+import OLRow from '@/shared/components/ol/ol-row'
+import OLCol from '@/shared/components/ol/ol-col'
+import OLButton from '@/shared/components/ol/ol-button'
 import { subscriptionUpdateUrl } from '@/features/subscription/data/subscription-url'
 import * as eventTracking from '@/infrastructure/event-tracking'
 import sparkleText from '@/shared/svgs/ai-sparkle-text.svg'
 import { useFeatureFlag } from '@/shared/context/split-test-context'
+import PaymentErrorNotification from '@/features/subscription/components/shared/payment-error-notification'
 import handleStripePaymentAction from '../../util/handle-stripe-payment-action'
+import RedirectedPaymentErrorNotification from '../shared/redirected-payment-error-notification'
 
 function PreviewSubscriptionChange() {
   const preview = getMeta(
@@ -32,6 +33,22 @@ function PreviewSubscriptionChange() {
   const payNowTask = useAsync()
   const location = useLocation()
   const aiAssistEnabled = useFeatureFlag('overleaf-assist-bundle')
+
+  // Filter out items that cancel each other out (AI assist items with subtotals that sum to 0)
+  const filteredLineItems = preview.immediateCharge.lineItems.filter(
+    (item, index, arr) => {
+      if (!item.isAiAssist) return true
+
+      const isCanceledByAnotherItem = arr.some(
+        (otherItem, otherIndex) =>
+          otherIndex !== index &&
+          otherItem.isAiAssist &&
+          otherItem.subtotal + item.subtotal === 0
+      )
+
+      return !isCanceledByAnotherItem
+    }
+  )
 
   useEffect(() => {
     if (preview.change.type === 'add-on-purchase') {
@@ -82,6 +99,7 @@ function PreviewSubscriptionChange() {
     <div className="container">
       <OLRow>
         <OLCol md={{ offset: 2, span: 8 }}>
+          <RedirectedPaymentErrorNotification />
           <OLCard className="p-3">
             {preview.change.type === 'add-on-purchase' ? (
               <h1>
@@ -96,15 +114,8 @@ function PreviewSubscriptionChange() {
             ) : null}
 
             {payNowTask.isError && (
-              <Notification
-                type="error"
-                aria-live="polite"
-                content={
-                  <>
-                    {t('generic_something_went_wrong')}. {t('try_again')}.{' '}
-                    {t('generic_if_problem_continues_contact_us')}.
-                  </>
-                }
+              <PaymentErrorNotification
+                error={payNowTask.error as FetchError}
               />
             )}
 
@@ -146,17 +157,38 @@ function PreviewSubscriptionChange() {
 
             <OLCard className="payment-summary-card mt-5">
               <h3>{t('due_today')}:</h3>
-              <OLRow>
-                <OLCol xs={9}>{changeName}</OLCol>
-                <OLCol xs={3} className="text-end">
-                  <strong>
-                    {formatCurrency(
-                      preview.immediateCharge.subtotal,
-                      preview.currency
-                    )}
-                  </strong>
-                </OLCol>
-              </OLRow>
+              {filteredLineItems.length > 1 ? (
+                <>
+                  {filteredLineItems.map((item, index) => (
+                    <OLRow key={index}>
+                      <OLCol xs={9}>
+                        {item.subtotal < 0
+                          ? `Refund: ${item.description}`
+                          : item.description}
+                      </OLCol>
+                      <OLCol xs={3} className="text-end">
+                        <strong>
+                          {formatCurrency(item.subtotal, preview.currency)}
+                        </strong>
+                      </OLCol>
+                    </OLRow>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <OLRow>
+                    <OLCol xs={9}>{changeName}</OLCol>
+                    <OLCol xs={3} className="text-end">
+                      <strong>
+                        {formatCurrency(
+                          preview.immediateCharge.subtotal,
+                          preview.currency
+                        )}
+                      </strong>
+                    </OLCol>
+                  </OLRow>
+                </>
+              )}
 
               {preview.immediateCharge.tax > 0 && (
                 <OLRow className="mt-1">
@@ -201,6 +233,11 @@ function PreviewSubscriptionChange() {
                 tOptions={{ interpolation: { escapeValue: true } }}
               />
             </div>
+            {aiAddOnChange && (
+              <div className="plan-terms mt-3">
+                *{t('fair_usage_policy_applies')}
+              </div>
+            )}
 
             <div className="mt-5">
               <OLButton

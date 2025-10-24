@@ -51,7 +51,7 @@ describe('DockerRunner', function () {
             },
           }),
         }),
-        './Metrics': {
+        '@overleaf/metrics': {
           Timer: (Timer = class Timer {
             done() {}
           }),
@@ -487,7 +487,7 @@ describe('DockerRunner', function () {
         return expect(options.HostConfig).to.deep.include({
           Binds: ['/some/host/dir/compiles/directory:/compile:rw'],
           LogConfig: { Type: 'none', Config: {} },
-          CapDrop: 'ALL',
+          CapDrop: ['ALL'],
           SecurityOpt: ['no-new-privileges'],
           newProperty: 'new-property',
         })

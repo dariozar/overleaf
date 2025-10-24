@@ -15,10 +15,10 @@ import importOverleafModules from '../../../../macros/import-overleaf-module.mac
 import BackToEditorButton from './back-to-editor-button'
 import getMeta from '@/utils/meta'
 import { isSplitTestEnabled } from '@/utils/splitTestUtils'
-import { canUseNewEditor } from '@/features/ide-redesign/utils/new-editor-utils'
 import TryNewEditorButton from '../try-new-editor-button'
 import { OnlineUser } from '@/features/ide-react/context/online-users-context'
 import { Cobranding } from '../../../../../types/cobranding'
+import { canUseNewEditor } from '@/features/ide-redesign/utils/new-editor-utils'
 
 const [publishModalModules] = importOverleafModules('publishModal') as {
   import: { default: ElementType }
@@ -38,6 +38,28 @@ const enableROMirrorOnClient =
   isSplitTestEnabled('ro-mirror-on-client') &&
   new URLSearchParams(window.location.search).get('ro-mirror-on-client') ===
     'enabled'
+
+export type ToolbarHeaderProps = {
+  cobranding: Cobranding | undefined
+  onShowLeftMenuClick: () => void
+  chatIsOpen: boolean
+  toggleChatOpen: () => void
+  reviewPanelOpen: boolean
+  toggleReviewPanelOpen: (e: React.MouseEvent) => void
+  historyIsOpen: boolean
+  toggleHistoryOpen: () => void
+  unreadMessageCount: number
+  onlineUsers: OnlineUser[]
+  goToUser: (user: OnlineUser) => void
+  isRestrictedTokenMember: boolean | undefined
+  hasPublishPermissions: boolean
+  chatVisible: boolean
+  projectName: string
+  renameProject: (name: string) => void
+  hasRenamePermissions: boolean
+  openShareModal: () => void
+  trackChangesVisible: boolean | undefined
+}
 
 const ToolbarHeader = React.memo(function ToolbarHeader({
   cobranding,
@@ -59,38 +81,14 @@ const ToolbarHeader = React.memo(function ToolbarHeader({
   hasRenamePermissions,
   openShareModal,
   trackChangesVisible,
-}: {
-  cobranding: Cobranding | undefined
-  onShowLeftMenuClick: () => void
-  chatIsOpen: boolean
-  toggleChatOpen: () => void
-  reviewPanelOpen: boolean
-  toggleReviewPanelOpen: (e: React.MouseEvent) => void
-  historyIsOpen: boolean
-  toggleHistoryOpen: () => void
-  unreadMessageCount: number
-  onlineUsers: OnlineUser[]
-  goToUser: (user: OnlineUser) => void
-  isRestrictedTokenMember: boolean | undefined
-  hasPublishPermissions: boolean
-  chatVisible: boolean
-  projectName: string
-  renameProject: (name: string) => void
-  hasRenamePermissions: boolean
-  openShareModal: () => void
-  trackChangesVisible: boolean | undefined
-}) {
+}: ToolbarHeaderProps) {
   const chatEnabled = getMeta('ol-capabilities')?.includes('chat')
 
   const { t } = useTranslation()
   const shouldDisplayPublishButton = hasPublishPermissions && PublishButton
 
   return (
-    <header
-      className="toolbar toolbar-header"
-      role="navigation"
-      aria-label={t('project_layout_sharing_submission')}
-    >
+    <nav className="toolbar toolbar-header" aria-label={t('project_actions')}>
       <div className="toolbar-left">
         <MenuButton onClick={onShowLeftMenuClick} />
         {cobranding && cobranding.logoImgUrl && (
@@ -156,7 +154,7 @@ const ToolbarHeader = React.memo(function ToolbarHeader({
           </>
         )}
       </div>
-    </header>
+    </nav>
   )
 })
 

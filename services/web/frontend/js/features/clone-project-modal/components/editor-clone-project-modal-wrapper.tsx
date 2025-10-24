@@ -1,7 +1,11 @@
-import React from 'react'
+import React, { useCallback } from 'react'
 import { useProjectContext } from '../../../shared/context/project-context'
 import withErrorBoundary from '../../../infrastructure/error-boundary'
 import CloneProjectModal from './clone-project-modal'
+
+type ProjectCopyResponse = {
+  project_id: string
+}
 
 const EditorCloneProjectModalWrapper = React.memo(
   function EditorCloneProjectModalWrapper({
@@ -11,15 +15,17 @@ const EditorCloneProjectModalWrapper = React.memo(
   }: {
     show: boolean
     handleHide: () => void
-    openProject: ({ project_id }: { project_id: string }) => void
+    openProject: (projectId: string) => void
   }) {
-    const {
-      _id: projectId,
-      name: projectName,
-      tags: projectTags,
-    } = useProjectContext()
+    const { project, tags: projectTags } = useProjectContext()
+    const handleAfterCloned = useCallback(
+      ({ project_id: projectId }: ProjectCopyResponse) => {
+        openProject(projectId)
+      },
+      [openProject]
+    )
 
-    if (!projectName) {
+    if (!project) {
       // wait for useProjectContext
       return null
     } else {
@@ -27,9 +33,9 @@ const EditorCloneProjectModalWrapper = React.memo(
         <CloneProjectModal
           handleHide={handleHide}
           show={show}
-          handleAfterCloned={openProject}
-          projectId={projectId}
-          projectName={projectName}
+          handleAfterCloned={handleAfterCloned}
+          projectId={project._id}
+          projectName={project.name}
           projectTags={projectTags}
         />
       )

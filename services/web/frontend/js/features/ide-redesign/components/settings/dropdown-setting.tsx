@@ -1,8 +1,8 @@
-import OLFormSelect from '@/features/ui/components/ol/ol-form-select'
+import OLFormSelect from '@/shared/components/ol/ol-form-select'
 import { ChangeEventHandler, useCallback } from 'react'
 import Setting from './setting'
 import classNames from 'classnames'
-import { Spinner } from 'react-bootstrap'
+import OLSpinner from '@/shared/components/ol/ol-spinner'
 
 type PossibleValue = string | number | boolean
 
@@ -31,6 +31,7 @@ type SettingsMenuSelectProps<T extends PossibleValue = string> = {
   disabled?: boolean
   width?: 'default' | 'wide'
   loading?: boolean
+  translateOptions?: 'yes' | 'no'
 }
 
 export default function DropdownSetting<T extends PossibleValue = string>({
@@ -44,6 +45,7 @@ export default function DropdownSetting<T extends PossibleValue = string>({
   disabled = false,
   width = 'default',
   loading = false,
+  translateOptions,
 }: SettingsMenuSelectProps<T>) {
   const handleChange: ChangeEventHandler<HTMLSelectElement> = useCallback(
     event => {
@@ -62,12 +64,7 @@ export default function DropdownSetting<T extends PossibleValue = string>({
   return (
     <Setting controlId={id} label={label} description={description}>
       {loading ? (
-        <Spinner
-          animation="border"
-          aria-hidden="true"
-          size="sm"
-          role="status"
-        />
+        <OLSpinner size="sm" />
       ) : (
         <OLFormSelect
           id={id}
@@ -78,6 +75,7 @@ export default function DropdownSetting<T extends PossibleValue = string>({
           onChange={handleChange}
           value={value?.toString()}
           disabled={disabled}
+          translate={translateOptions}
         >
           {options.map(option => (
             <option

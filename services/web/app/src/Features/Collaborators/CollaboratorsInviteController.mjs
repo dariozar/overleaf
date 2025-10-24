@@ -1,7 +1,7 @@
-import ProjectGetter from '../Project/ProjectGetter.js'
-import LimitationsManager from '../Subscription/LimitationsManager.js'
+import ProjectGetter from '../Project/ProjectGetter.mjs'
+import LimitationsManager from '../Subscription/LimitationsManager.mjs'
 import UserGetter from '../User/UserGetter.js'
-import CollaboratorsGetter from './CollaboratorsGetter.js'
+import CollaboratorsGetter from './CollaboratorsGetter.mjs'
 import CollaboratorsInviteHandler from './CollaboratorsInviteHandler.mjs'
 import CollaboratorsInviteGetter from './CollaboratorsInviteGetter.js'
 import logger from '@overleaf/logger'
@@ -11,10 +11,11 @@ import EditorRealTimeController from '../Editor/EditorRealTimeController.js'
 import AnalyticsManager from '../Analytics/AnalyticsManager.js'
 import SessionManager from '../Authentication/SessionManager.js'
 import { RateLimiter } from '../../infrastructure/RateLimiter.js'
+import { z, zz, validateReq } from '../../infrastructure/Validation.js'
 import { expressify } from '@overleaf/promise-utils'
-import ProjectAuditLogHandler from '../Project/ProjectAuditLogHandler.js'
+import ProjectAuditLogHandler from '../Project/ProjectAuditLogHandler.mjs'
 import Errors from '../Errors/Errors.js'
-import AuthenticationController from '../Authentication/AuthenticationController.js'
+import AuthenticationController from '../Authentication/AuthenticationController.mjs'
 import PrivilegeLevels from '../Authorization/PrivilegeLevels.js'
 
 // This rate limiter allows a different number of requests depending on the
@@ -80,9 +81,24 @@ async function _checkRateLimit(userId) {
   return true
 }
 
+const inviteToProjectSchema = z.object({
+  params: z.object({
+    Project_id: zz.objectId(),
+  }),
+  body: z.object({
+    email: z.string(),
+    privileges: z.enum([
+      PrivilegeLevels.READ_ONLY,
+      PrivilegeLevels.READ_AND_WRITE,
+      PrivilegeLevels.REVIEW,
+    ]),
+  }),
+})
+
 async function inviteToProject(req, res) {
-  const projectId = req.params.Project_id
-  let { email, privileges } = req.body
+  const { params, body } = validateReq(req, inviteToProjectSchema)
+  const projectId = params.Project_id
+  let { email, privileges } = body
   const sendingUser = SessionManager.getSessionUser(req.session)
   const sendingUserId = sendingUser._id
   req.logger.addFields({ email, sendingUserId })

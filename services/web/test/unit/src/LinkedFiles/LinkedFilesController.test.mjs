@@ -47,7 +47,7 @@ describe('LinkedFilesController', function () {
     ctx.settings = { enabledLinkedFileTypes: [] }
 
     vi.doMock(
-      '.../../../../app/src/Features/Authentication/SessionManager',
+      '../../../../app/src/Features/Authentication/SessionManager',
       () => ({
         default: ctx.SessionManager,
       })
@@ -132,8 +132,8 @@ describe('LinkedFilesController', function () {
       ctx.next = sinon.stub()
     })
 
-    it('sets importedAt timestamp on linkedFileData', function (ctx) {
-      return new Promise(resolve => {
+    it('sets importedAt timestamp on linkedFileData', async function (ctx) {
+      await new Promise(resolve => {
         ctx.next = sinon.stub().callsFake(() => resolve('unexpected error'))
         ctx.res = {
           json: () => {
@@ -177,8 +177,8 @@ describe('LinkedFilesController', function () {
       ctx.next = sinon.stub()
     })
 
-    it('resets importedAt timestamp on linkedFileData', function (ctx) {
-      return new Promise(resolve => {
+    it('resets importedAt timestamp on linkedFileData', async function (ctx) {
+      await new Promise(resolve => {
         ctx.next = sinon.stub().callsFake(() => resolve('unexpected error'))
         ctx.res = {
           json: () => {

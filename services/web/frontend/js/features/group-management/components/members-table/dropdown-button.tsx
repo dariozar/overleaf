@@ -10,7 +10,7 @@ import {
   DropdownItem,
   DropdownMenu,
   DropdownToggle,
-} from '@/features/ui/components/bootstrap-5/dropdown-menu'
+} from '@/shared/components/dropdown/dropdown-menu'
 import { User } from '../../../../../../types/group-management/user'
 import useAsync from '@/shared/hooks/use-async'
 import { type FetchError, postJSON } from '@/infrastructure/fetch-json'
@@ -18,9 +18,9 @@ import { GroupUserAlert } from '../../utils/types'
 import { useGroupMembersContext } from '../../context/group-members-context'
 import getMeta from '@/utils/meta'
 import MaterialIcon from '@/shared/components/material-icon'
-import DropdownListItem from '@/features/ui/components/bootstrap-5/dropdown-list-item'
-import { Spinner } from 'react-bootstrap'
+import DropdownListItem from '@/shared/components/dropdown/dropdown-list-item'
 import { sendMB } from '@/infrastructure/event-tracking'
+import OLSpinner from '@/shared/components/ol/ol-spinner'
 
 type resendInviteResponse = {
   success: boolean
@@ -322,16 +322,7 @@ function MenuItemButton({
         as="button"
         tabIndex={-1}
         onClick={onClick}
-        leadingIcon={
-          isLoading ? (
-            <Spinner
-              animation="border"
-              aria-hidden="true"
-              size="sm"
-              role="status"
-            />
-          ) : null
-        }
+        leadingIcon={isLoading ? <OLSpinner size="sm" /> : null}
         data-testid={dataTestId}
         variant={variant}
       >

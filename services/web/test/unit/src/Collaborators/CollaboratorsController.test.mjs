@@ -1,4 +1,4 @@
-import { expect, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import sinon from 'sinon'
 import mongodb from 'mongodb-legacy'
 import Errors from '../../../../app/src/Features/Errors/Errors.js'
@@ -88,21 +88,21 @@ describe('CollaboratorsController', function () {
     }))
 
     vi.doMock(
-      '../../../../app/src/Features/Collaborators/CollaboratorsHandler.js',
+      '../../../../app/src/Features/Collaborators/CollaboratorsHandler.mjs',
       () => ({
         default: ctx.CollaboratorsHandler,
       })
     )
 
     vi.doMock(
-      '../../../../app/src/Features/Collaborators/CollaboratorsGetter.js',
+      '../../../../app/src/Features/Collaborators/CollaboratorsGetter.mjs',
       () => ({
         default: ctx.CollaboratorsGetter,
       })
     )
 
     vi.doMock(
-      '../../../../app/src/Features/Collaborators/OwnershipTransferHandler.js',
+      '../../../../app/src/Features/Collaborators/OwnershipTransferHandler.mjs',
       () => ({
         default: ctx.OwnershipTransferHandler,
       })
@@ -141,13 +141,13 @@ describe('CollaboratorsController', function () {
     )
 
     vi.doMock(
-      '../../../../app/src/Features/Project/ProjectAuditLogHandler.js',
+      '../../../../app/src/Features/Project/ProjectAuditLogHandler.mjs',
       () => ({
         default: ctx.ProjectAuditLogHandler,
       })
     )
 
-    vi.doMock('../../../../app/src/Features/Project/ProjectGetter.js', () => ({
+    vi.doMock('../../../../app/src/Features/Project/ProjectGetter.mjs', () => ({
       default: ctx.ProjectGetter,
     }))
 
@@ -159,7 +159,7 @@ describe('CollaboratorsController', function () {
     )
 
     vi.doMock(
-      '../../../../app/src/Features/Subscription/LimitationsManager.js',
+      '../../../../app/src/Features/Subscription/LimitationsManager.mjs',
       () => ({
         default: ctx.LimitationsManager,
       })
@@ -169,8 +169,8 @@ describe('CollaboratorsController', function () {
   })
 
   describe('removeUserFromProject', function () {
-    beforeEach(function (ctx) {
-      return new Promise(resolve => {
+    beforeEach(async function (ctx) {
+      await new Promise(resolve => {
         ctx.req.params = {
           Project_id: ctx.projectId,
           user_id: ctx.user._id,
@@ -219,8 +219,8 @@ describe('CollaboratorsController', function () {
   })
 
   describe('removeSelfFromProject', function () {
-    beforeEach(function (ctx) {
-      return new Promise(resolve => {
+    beforeEach(async function (ctx) {
+      await new Promise(resolve => {
         ctx.req.params = { Project_id: ctx.projectId }
         ctx.res.sendStatus = sinon.spy(() => {
           resolve()
@@ -264,8 +264,8 @@ describe('CollaboratorsController', function () {
   })
 
   describe('getAllMembers', function () {
-    beforeEach(function (ctx) {
-      return new Promise(resolve => {
+    beforeEach(async function (ctx) {
+      await new Promise(resolve => {
         ctx.req.params = { Project_id: ctx.projectId }
         ctx.res.json = sinon.spy(() => {
           resolve()
@@ -294,8 +294,8 @@ describe('CollaboratorsController', function () {
     })
 
     describe('when CollaboratorsGetter.getAllInvitedMembers produces an error', function () {
-      beforeEach(function (ctx) {
-        return new Promise(resolve => {
+      beforeEach(async function (ctx) {
+        await new Promise(resolve => {
           ctx.res.json = sinon.stub()
           ctx.next = sinon.spy(() => {
             resolve()
@@ -323,27 +323,31 @@ describe('CollaboratorsController', function () {
   describe('setCollaboratorInfo', function () {
     beforeEach(function (ctx) {
       ctx.req.params = {
-        Project_id: ctx.projectId,
-        user_id: ctx.user._id,
+        Project_id: ctx.projectId.toString(),
+        user_id: ctx.user._id.toString(),
       }
       ctx.req.body = { privilegeLevel: 'readOnly' }
     })
 
-    it('should set the collaborator privilege level', function (ctx) {
-      return new Promise(resolve => {
+    it('should set the collaborator privilege level', async function (ctx) {
+      await new Promise(resolve => {
         ctx.res.sendStatus = status => {
           expect(status).to.equal(204)
           expect(
             ctx.CollaboratorsHandler.promises.setCollaboratorPrivilegeLevel
-          ).to.have.been.calledWith(ctx.projectId, ctx.user._id, 'readOnly')
+          ).to.have.been.calledWith(
+            ctx.projectId.toString(),
+            ctx.user._id.toString(),
+            'readOnly'
+          )
           resolve()
         }
         ctx.CollaboratorsController.setCollaboratorInfo(ctx.req, ctx.res)
       })
     })
 
-    it('should return a 404 when the project or collaborator is not found', function (ctx) {
-      return new Promise(resolve => {
+    it('should return a 404 when the project or collaborator is not found', async function (ctx) {
+      await new Promise(resolve => {
         ctx.HttpErrorHandler.notFound = sinon.spy((req, res) => {
           expect(req).to.equal(ctx.req)
           expect(res).to.equal(ctx.res)
@@ -357,8 +361,8 @@ describe('CollaboratorsController', function () {
       })
     })
 
-    it('should pass the error to the next handler when setting the privilege level fails', function (ctx) {
-      return new Promise(resolve => {
+    it('should pass the error to the next handler when setting the privilege level fails', async function (ctx) {
+      await new Promise(resolve => {
         ctx.next = sinon.spy(err => {
           expect(err).instanceOf(Error)
           resolve()
@@ -381,16 +385,16 @@ describe('CollaboratorsController', function () {
       })
 
       describe('when owner can add new edit collaborators', function () {
-        it('should set privilege level after checking collaborators can be added', function (ctx) {
-          return new Promise(resolve => {
+        it('should set privilege level after checking collaborators can be added', async function (ctx) {
+          await new Promise(resolve => {
             ctx.res.sendStatus = status => {
               expect(status).to.equal(204)
               expect(
                 ctx.LimitationsManager.promises
                   .canChangeCollaboratorPrivilegeLevel
               ).to.have.been.calledWith(
-                ctx.projectId,
-                ctx.user._id,
+                ctx.projectId.toString(),
+                ctx.user._id.toString(),
                 'readAndWrite'
               )
               resolve()
@@ -407,8 +411,8 @@ describe('CollaboratorsController', function () {
           )
         })
 
-        it('should return a 403 if trying to set a new edit collaborator', function (ctx) {
-          return new Promise(resolve => {
+        it('should return a 403 if trying to set a new edit collaborator', async function (ctx) {
+          await new Promise(resolve => {
             ctx.HttpErrorHandler.forbidden = sinon.spy((req, res) => {
               expect(req).to.equal(ctx.req)
               expect(res).to.equal(ctx.res)
@@ -416,8 +420,8 @@ describe('CollaboratorsController', function () {
                 ctx.LimitationsManager.promises
                   .canChangeCollaboratorPrivilegeLevel
               ).to.have.been.calledWith(
-                ctx.projectId,
-                ctx.user._id,
+                ctx.projectId.toString(),
+                ctx.user._id.toString(),
                 'readAndWrite'
               )
               expect(
@@ -443,15 +447,19 @@ describe('CollaboratorsController', function () {
           )
         })
 
-        it('should always allow setting a collaborator to viewer even if user cant add edit collaborators', function (ctx) {
-          return new Promise(resolve => {
+        it('should always allow setting a collaborator to viewer even if user cant add edit collaborators', async function (ctx) {
+          await new Promise(resolve => {
             ctx.res.sendStatus = status => {
               expect(status).to.equal(204)
               expect(ctx.LimitationsManager.promises.canAddXEditCollaborators)
                 .to.not.have.been.called
               expect(
                 ctx.CollaboratorsHandler.promises.setCollaboratorPrivilegeLevel
-              ).to.have.been.calledWith(ctx.projectId, ctx.user._id, 'readOnly')
+              ).to.have.been.calledWith(
+                ctx.projectId.toString(),
+                ctx.user._id.toString(),
+                'readOnly'
+              )
               resolve()
             }
             ctx.CollaboratorsController.setCollaboratorInfo(ctx.req, ctx.res)
@@ -463,21 +471,19 @@ describe('CollaboratorsController', function () {
 
   describe('transferOwnership', function () {
     beforeEach(function (ctx) {
+      ctx.req.params = { Project_id: ctx.projectId.toString() }
       ctx.req.body = { user_id: ctx.user._id.toString() }
     })
 
-    it('returns 204 on success', function (ctx) {
-      return new Promise(resolve => {
-        ctx.res.sendStatus = status => {
-          expect(status).to.equal(204)
-          resolve()
-        }
-        ctx.CollaboratorsController.transferOwnership(ctx.req, ctx.res)
-      })
+    it('returns 204 on success', async function (ctx) {
+      ctx.res.sendStatus = vi.fn()
+
+      await ctx.CollaboratorsController.transferOwnership(ctx.req, ctx.res)
+      expect(ctx.res.sendStatus).toHaveBeenCalledWith(204)
     })
 
-    it('returns 404 if the project does not exist', function (ctx) {
-      return new Promise(resolve => {
+    it('returns 404 if the project does not exist', async function (ctx) {
+      await new Promise(resolve => {
         ctx.HttpErrorHandler.notFound = sinon.spy((req, res, message) => {
           expect(req).to.equal(ctx.req)
           expect(res).to.equal(ctx.res)
@@ -491,8 +497,8 @@ describe('CollaboratorsController', function () {
       })
     })
 
-    it('returns 404 if the user does not exist', function (ctx) {
-      return new Promise(resolve => {
+    it('returns 404 if the user does not exist', async function (ctx) {
+      await new Promise(resolve => {
         ctx.HttpErrorHandler.notFound = sinon.spy((req, res, message) => {
           expect(req).to.equal(ctx.req)
           expect(res).to.equal(ctx.res)
@@ -506,12 +512,12 @@ describe('CollaboratorsController', function () {
       })
     })
 
-    it('invokes HTTP forbidden error handler if the user is not a collaborator', function (ctx) {
-      return new Promise(resolve => {
+    it('invokes HTTP forbidden error handler if the user is not a collaborator', async function (ctx) {
+      ctx.OwnershipTransferHandler.promises.transferOwnership.rejects(
+        new Errors.UserNotCollaboratorError()
+      )
+      await new Promise(resolve => {
         ctx.HttpErrorHandler.forbidden = sinon.spy(() => resolve())
-        ctx.OwnershipTransferHandler.promises.transferOwnership.rejects(
-          new Errors.UserNotCollaboratorError()
-        )
         ctx.CollaboratorsController.transferOwnership(ctx.req, ctx.res)
       })
     })

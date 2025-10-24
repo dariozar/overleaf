@@ -1,7 +1,6 @@
-// ts-check
+// @ts-check
 const { ObjectId } = require('mongodb-legacy')
 const _ = require('lodash')
-const { promisify } = require('util')
 const Settings = require('@overleaf/settings')
 
 /**
@@ -20,12 +19,8 @@ module.exports = {
   isArchived,
   isTrashed,
   isArchivedOrTrashed,
-  calculateArchivedArray,
-  ensureNameIsUnique,
   getAllowedImagesForUser,
-  promises: {
-    ensureNameIsUnique: promisify(ensureNameIsUnique),
-  },
+  ensureNameIsUnique,
 }
 
 function compilerFromV1Engine(engine) {
@@ -34,22 +29,22 @@ function compilerFromV1Engine(engine) {
 
 /**
  @param {MongoProject} project
- @param {string} userId
+ @param {string} rawUserId
  * @returns {boolean}
  */
-function isArchived(project, userId) {
-  userId = new ObjectId(userId)
+function isArchived(project, rawUserId) {
+  const userId = new ObjectId(rawUserId)
 
   return (project.archived || []).some(id => id.equals(userId))
 }
 
 /**
  * @param {MongoProject} project
- * @param {string} userId
+ * @param {string} rawUserId
  * @returns {boolean}
  */
-function isTrashed(project, userId) {
-  userId = new ObjectId(userId)
+function isTrashed(project, rawUserId) {
+  const userId = new ObjectId(rawUserId)
 
   return (project.trashed || []).some(id => id.equals(userId))
 }
@@ -63,39 +58,14 @@ function isArchivedOrTrashed(project, userId) {
   return isArchived(project, userId) || isTrashed(project, userId)
 }
 
-function _allCollaborators(project) {
-  return _.unionWith(
-    [project.owner_ref],
-    project.collaberator_refs,
-    project.readOnly_refs,
-    project.tokenAccessReadAndWrite_refs,
-    project.tokenAccessReadOnly_refs,
-    _objectIdEquals
-  )
-}
-
-function calculateArchivedArray(project, userId, action) {
-  let archived = project.archived
-  userId = new ObjectId(userId)
-
-  if (archived === true) {
-    archived = _allCollaborators(project)
-  } else if (!archived) {
-    archived = []
-  }
-
-  if (action === 'ARCHIVE') {
-    archived = _.unionWith(archived, [userId], _objectIdEquals)
-  } else if (action === 'UNARCHIVE') {
-    archived = archived.filter(id => !_objectIdEquals(id, userId))
-  } else {
-    throw new Error('Unrecognised action')
-  }
-
-  return archived
-}
-
-function ensureNameIsUnique(nameList, name, suffixes, maxLength, callback) {
+/**
+ * @param {string[]} nameList
+ * @param {string} name
+ * @param {string[]} suffixes
+ * @param {number} maxLength
+ * @returns string
+ */
+function ensureNameIsUnique(nameList, name, suffixes, maxLength) {
   // create a set of all project names
   if (suffixes == null) {
     suffixes = []
@@ -104,27 +74,22 @@ function ensureNameIsUnique(nameList, name, suffixes, maxLength, callback) {
   const isUnique = x => !allNames.has(x)
   // check if the supplied name is already unique
   if (isUnique(name)) {
-    return callback(null, name)
+    return name
   }
   // the name already exists, try adding the user-supplied suffixes to generate a unique name
   for (const suffix of suffixes) {
     const candidateName = _addSuffixToProjectName(name, suffix, maxLength)
     if (isUnique(candidateName)) {
-      return callback(null, candidateName)
+      return candidateName
     }
   }
   // if there are no (more) suffixes, use a numeric one
   const uniqueName = _addNumericSuffixToProjectName(name, allNames, maxLength)
   if (uniqueName != null) {
-    callback(null, uniqueName)
+    return uniqueName
   } else {
-    callback(new Error(`Failed to generate a unique name for: ${name}`))
+    throw new Error(`Failed to generate a unique name for: ${name}`)
   }
-}
-
-function _objectIdEquals(firstVal, secondVal) {
-  // For use as a comparator for unionWith
-  return firstVal.toString() === secondVal.toString()
 }
 
 function _addSuffixToProjectName(name, suffix, maxLength) {
@@ -136,6 +101,11 @@ function _addSuffixToProjectName(name, suffix, maxLength) {
   return name.substr(0, truncatedLength) + suffix
 }
 
+/**
+ * @param {string} name
+ * @param {Set<string>} allProjectNames
+ * @param {number} maxLength
+ */
 function _addNumericSuffixToProjectName(name, allProjectNames, maxLength) {
   const NUMERIC_SUFFIX_MATCH = / \((\d+)\)$/
   const suffixedName = function (basename, number) {
@@ -175,11 +145,28 @@ function _addNumericSuffixToProjectName(name, allProjectNames, maxLength) {
   return null
 }
 
-function getAllowedImagesForUser(user) {
-  const images = Settings.allowedImageNames || []
-  if (user?.alphaProgram) {
-    return images
-  } else {
-    return images.filter(image => !image.alphaOnly)
+function _imageAllowed(user, image) {
+  if (image.alphaOnly) {
+    return Boolean(user?.alphaProgram)
   }
+  if (image.monthlyExperimental) {
+    return Boolean(
+      user?.labsProgram && user.labsExperiments.includes('monthly-texlive')
+    )
+  }
+  return true
+}
+
+function getAllowedImagesForUser(user) {
+  let images = Settings.allowedImageNames || []
+
+  images = images.map(image => {
+    return {
+      ...image,
+      allowed: _imageAllowed(user, image),
+      rolling: image.monthlyExperimental,
+    }
+  })
+
+  return images
 }

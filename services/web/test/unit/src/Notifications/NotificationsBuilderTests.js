@@ -7,17 +7,21 @@ const modulePath = require('path').join(
 )
 
 describe('NotificationsBuilder', function () {
-  const userId = '123nd3ijdks'
+  const userId = '507f1f77bcf86cd799439011'
 
   beforeEach(function () {
-    this.handler = { createNotification: sinon.stub().callsArgWith(6) }
-    this.settings = { apis: { v1: { url: 'v1.url', user: '', pass: '' } } }
-    this.request = sinon.stub()
+    this.handler = { promises: { createNotification: sinon.stub().resolves() } }
+    this.settings = {
+      apis: { v1: { url: 'http://v1.url', user: '', pass: '' } },
+    }
+    this.FetchUtils = {
+      fetchJson: sinon.stub(),
+    }
     this.controller = SandboxedModule.require(modulePath, {
       requires: {
         './NotificationsHandler': this.handler,
         '@overleaf/settings': this.settings,
-        request: this.request,
+        '@overleaf/fetch-utils': this.FetchUtils,
       },
     })
   })
@@ -27,7 +31,7 @@ describe('NotificationsBuilder', function () {
       await this.controller.promises
         .dropboxUnlinkedDueToLapsedReconfirmation(userId)
         .create()
-      expect(this.handler.createNotification).to.have.been.calledWith(
+      expect(this.handler.promises.createNotification).to.have.been.calledWith(
         userId,
         'drobox-unlinked-due-to-lapsed-reconfirmation',
         'notification_dropbox_unlinked_due_to_lapsed_reconfirmation',
@@ -40,7 +44,7 @@ describe('NotificationsBuilder', function () {
       let anError
       beforeEach(function () {
         anError = new Error('oops')
-        this.handler.createNotification.yields(anError)
+        this.handler.promises.createNotification.rejects(anError)
       })
       it('should return errors from NotificationsHandler', async function () {
         let error
@@ -76,7 +80,7 @@ describe('NotificationsBuilder', function () {
           this.invite.managedUsersEnabled
         )
         .create(this.invite)
-      expect(this.handler.createNotification).to.have.been.calledWith(
+      expect(this.handler.promises.createNotification).to.have.been.calledWith(
         userId,
         `groupInvitation-${subscriptionId}-${userId}`,
         'notification_group_invitation',
@@ -97,26 +101,24 @@ describe('NotificationsBuilder', function () {
         this.body = {
           id: 1,
           name: 'stanford',
-          enrolment_ad_html: 'v1 ad content',
           is_university: true,
           portal_slug: null,
           sso_enabled: false,
         }
-        this.request.callsArgWith(1, null, { statusCode: 200 }, this.body)
+        this.FetchUtils.fetchJson.resolves(this.body)
       })
 
       it('should call v1 and create affiliation notifications', async function () {
         const ip = '192.168.0.1'
         await this.controller.promises.ipMatcherAffiliation(userId).create(ip)
-        this.request.calledOnce.should.equal(true)
+        this.FetchUtils.fetchJson.calledOnce.should.equal(true)
         const expectedOpts = {
           institutionId: this.body.id,
           university_name: this.body.name,
-          content: this.body.enrolment_ad_html,
           ssoEnabled: false,
           portalPath: undefined,
         }
-        this.handler.createNotification
+        this.handler.promises.createNotification
           .calledWith(
             userId,
             `ip-matched-affiliation-${this.body.id}`,
@@ -131,26 +133,24 @@ describe('NotificationsBuilder', function () {
         this.body = {
           id: 1,
           name: 'stanford',
-          enrolment_ad_html: 'v1 ad content',
           is_university: true,
           portal_slug: 'stanford',
           sso_enabled: true,
         }
-        this.request.callsArgWith(1, null, { statusCode: 200 }, this.body)
+        this.FetchUtils.fetchJson.resolves(this.body)
       })
 
       it('should call v1 and create affiliation notifications', async function () {
         const ip = '192.168.0.1'
         await this.controller.promises.ipMatcherAffiliation(userId).create(ip)
-        this.request.calledOnce.should.equal(true)
+        this.FetchUtils.fetchJson.calledOnce.should.equal(true)
         const expectedOpts = {
           institutionId: this.body.id,
           university_name: this.body.name,
-          content: this.body.enrolment_ad_html,
           ssoEnabled: true,
           portalPath: '/edu/stanford',
         }
-        this.handler.createNotification
+        this.handler.promises.createNotification
           .calledWith(
             userId,
             `ip-matched-affiliation-${this.body.id}`,

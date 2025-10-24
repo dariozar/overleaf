@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import * as eventTracking from '../../../../../../infrastructure/event-tracking'
 import { useSubscriptionDashboardContext } from '../../../../context/subscription-dashboard-context'
-import OLButton from '@/features/ui/components/ol/ol-button'
+import OLButton from '@/shared/components/ol/ol-button'
 import { PaidSubscription } from '../../../../../../../../types/subscription/dashboard/subscription'
 import { useFeatureFlag } from '@/shared/context/split-test-context'
 
@@ -35,8 +35,11 @@ export function CancelSubscriptionButton() {
       plan_code: subscription?.planCode,
       is_trial: isInTrial,
     })
-    if (enablePause) setModalIdShown('pause-subscription')
-    else setShowCancellation(true)
+    if (enablePause) {
+      setModalIdShown('pause-subscription')
+    } else {
+      setShowCancellation(true)
+    }
   }
 
   if (recurlyLoadError) return null

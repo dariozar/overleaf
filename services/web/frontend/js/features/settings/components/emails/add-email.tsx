@@ -17,9 +17,11 @@ import { isValidEmail } from '../../../../shared/utils/email'
 import getMeta from '../../../../utils/meta'
 import { ReCaptcha2 } from '../../../../shared/components/recaptcha-2'
 import { useRecaptcha } from '../../../../shared/hooks/use-recaptcha'
-import OLCol from '@/features/ui/components/ol/ol-col'
+import OLCol from '@/shared/components/ol/ol-col'
 import { ConfirmEmailForm } from '@/features/settings/components/emails/confirm-email-form'
 import RecaptchaConditions from '@/shared/components/recaptcha-conditions'
+import SsoLinkingInfoGroup from './add-email/sso-linking-info-group'
+import Notification from '@/shared/components/notification'
 
 function AddEmail() {
   const { t } = useTranslation()
@@ -240,9 +242,9 @@ function AddEmail() {
           <OLCol lg={12}>
             <Cell>
               <div className="affiliations-table-cell-tabbed">
-                <SsoLinkingInfo
+                <AddEmailViaSSO
                   email={newEmail}
-                  domainInfo={newEmailMatchedDomain as DomainInfo}
+                  domainInfo={newEmailMatchedDomain}
                 />
               </div>
             </Cell>
@@ -252,6 +254,41 @@ function AddEmail() {
       </Layout>
     </form>
   )
+}
+
+function AddEmailViaSSO({
+  email,
+  domainInfo,
+}: {
+  email: string
+  domainInfo: DomainInfo
+}) {
+  if (domainInfo.university.ssoEnabled) {
+    // SSO for Commons institution
+    return <SsoLinkingInfo email={email} domainInfo={domainInfo} />
+  } else if (
+    domainInfo.group?.domainCaptureEnabled &&
+    domainInfo.group?.managedUsersEnabled
+  ) {
+    return (
+      <Notification
+        type="error"
+        ariaLive="polite"
+        content={
+          <>
+            Your company email address has been registered under a verified
+            domain, and cannot be added as a secondary email. Please create a
+            new <strong>Overleaf</strong> account linked to this email address.
+          </>
+        }
+      />
+    )
+  } else if (
+    domainInfo.group?.domainCaptureEnabled &&
+    domainInfo.group?.ssoConfig?.enabled
+  ) {
+    return <SsoLinkingInfoGroup domainInfo={domainInfo} />
+  }
 }
 
 export default AddEmail

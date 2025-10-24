@@ -27,6 +27,9 @@ const QUEUES_JOB_OPTIONS = {
     removeOnFail: MAX_FAILED_JOBS_RETAINED,
     attempts: 3,
   },
+  'analytics-email-change': {
+    removeOnFail: MAX_FAILED_JOBS_RETAINED_ANALYTICS,
+  },
   'emails-onboarding': {
     removeOnFail: MAX_FAILED_JOBS_RETAINED,
   },
@@ -46,6 +49,10 @@ const QUEUES_JOB_OPTIONS = {
     removeOnFail: MAX_FAILED_JOBS_RETAINED,
     attempts: 3,
   },
+  'deferred-subscription-webhook-event': {
+    removeOnFail: MAX_FAILED_JOBS_RETAINED,
+    attempts: 3,
+  },
 }
 
 const QUEUE_OPTIONS = {
@@ -59,6 +66,7 @@ const QUEUE_OPTIONS = {
 
 const ANALYTICS_QUEUES = [
   'analytics-account-mapping',
+  'analytics-email-change',
   'analytics-events',
   'analytics-editing-sessions',
   'analytics-user-properties',

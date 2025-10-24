@@ -1,7 +1,7 @@
 import {
   DropdownItem,
   DropdownHeader,
-} from '@/features/ui/components/bootstrap-5/dropdown-menu'
+} from '@/shared/components/dropdown/dropdown-menu'
 import {
   IdeLayout,
   IdeView,
@@ -11,8 +11,8 @@ import React, { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import useEventListener from '@/shared/hooks/use-event-listener'
 import { DetachRole } from '@/shared/context/detach-context'
-import { Spinner } from 'react-bootstrap'
 import { useEditorAnalytics } from '@/shared/hooks/use-editor-analytics'
+import OLSpinner from '@/shared/components/ol/ol-spinner'
 
 type LayoutOption = 'sideBySide' | 'editorOnly' | 'pdfOnly' | 'detachedPdf'
 
@@ -65,9 +65,7 @@ const LayoutDropdownItem = ({
 }) => {
   let trailingIcon: string | React.ReactNode | null = null
   if (processing) {
-    trailingIcon = (
-      <Spinner animation="border" aria-hidden="true" size="sm" role="status" />
-    )
+    trailingIcon = <OLSpinner size="sm" />
   } else if (active) {
     trailingIcon = 'check'
   }

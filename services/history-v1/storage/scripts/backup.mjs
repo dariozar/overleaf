@@ -221,7 +221,6 @@ async function backupChunk(
   }
   const key = makeChunkKey(historyId, chunkToBackup.startVersion)
   logger.debug({ chunkRecord, historyId, projectId, key }, 'backing up chunk')
-  const md5 = Crypto.createHash('md5').update(chunkBuffer)
   await chunkBackupPersistorForProject.sendStream(
     chunksBucket,
     makeChunkKey(historyId, chunkToBackup.startVersion),
@@ -230,7 +229,6 @@ async function backupChunk(
       contentType: 'application/json',
       contentEncoding: 'gzip',
       contentLength: chunkBuffer.byteLength,
-      sourceMd5: md5.digest('hex'),
     }
   )
 }
@@ -915,7 +913,7 @@ async function compareBackups(projectId, options) {
           const globalBlob = GLOBAL_BLOBS.get(blob.hash)
           console.log(
             `  ✓ Blob ${blob.hash} is a global blob`,
-            globalBlob.demoted ? '(demoted)' : ''
+            globalBlob?.demoted ? '(demoted)' : ''
           )
           continue
         }

@@ -43,10 +43,7 @@ const ChatPane = React.memo(function ChatPane() {
 
   const shouldDisplayPlaceholder = status !== 'pending' && messages.length === 0
 
-  const messageContentCount = messages.reduce(
-    (acc, { contents }) => acc + contents.length,
-    0
-  )
+  const messageContentCount = messages.length
 
   // Keep the chat pane in the DOM to avoid resetting the form input and re-rendering MathJax content.
   const [chatOpenedOnce, setChatOpenedOnce] = useState(chatIsOpen)
@@ -72,7 +69,7 @@ const ChatPane = React.memo(function ChatPane() {
   }
 
   return (
-    <aside className="chat">
+    <aside className="chat" aria-label={t('chat')}>
       <InfiniteScroll
         atEnd={atEnd}
         className="messages"

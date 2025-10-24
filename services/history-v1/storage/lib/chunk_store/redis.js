@@ -364,9 +364,11 @@ async function getChangesSinceVersion(projectId, version) {
     if (status === 'ok') {
       // If status is OK, parse the changes
       const changes = result[1]
-        ? result[1].map(rawChange =>
-            typeof rawChange === 'string' ? JSON.parse(rawChange) : rawChange
-          )
+        ? result[1]
+            .map(rawChange =>
+              typeof rawChange === 'string' ? JSON.parse(rawChange) : rawChange
+            )
+            .map(Change.fromRaw)
         : []
 
       metrics.inc('chunk_store.redis.get_changes_since_version', 1, {
@@ -395,6 +397,7 @@ rclient.defineCommand('get_non_persisted_changes', {
     local persistedVersionKey = KEYS[2]
     local changesKey = KEYS[3]
     local baseVersion = tonumber(ARGV[1])
+    local maxChanges = tonumber(ARGV[2])
 
     -- Check if head version exists
     local headVersion = tonumber(redis.call('GET', headVersionKey))
@@ -415,9 +418,20 @@ rclient.defineCommand('get_non_persisted_changes', {
       return {'ok', {}}
     else
       local numChanges = headVersion - baseVersion
-      local changes = redis.call('LRANGE', changesKey, -numChanges, -1)
 
-      if #changes < numChanges then
+      local endIndex, expectedChanges
+      if maxChanges > 0 and maxChanges < numChanges then
+        -- return only the first maxChanges changes; the end index is inclusive
+        endIndex = -numChanges + maxChanges - 1
+        expectedChanges = maxChanges
+      else
+        endIndex = -1
+        expectedChanges = numChanges
+      end
+
+      local changes = redis.call('LRANGE', changesKey, -numChanges, endIndex)
+
+      if #changes < expectedChanges then
         -- We didn't get as many changes as we expected
         return {'out_of_bounds'}
       end
@@ -433,6 +447,9 @@ rclient.defineCommand('get_non_persisted_changes', {
  * @param {string} projectId - The unique identifier of the project.
  * @param {number} baseVersion - The version on top of which the changes should
  *        be applied.
+ * @param {object} [opts]
+ * @param {number} [opts.maxChanges] - The maximum number of changes to return.
+ *        Defaults to 0, meaning no limit.
  * @returns {Promise<Change[]>} Changes that can be applied on top of
  *          baseVersion. An empty array means that the project doesn't have
  *          changes to persist. A null value means that the non-persisted
@@ -440,14 +457,15 @@ rclient.defineCommand('get_non_persisted_changes', {
  *
  * @throws {Error} If Redis operations fail.
  */
-async function getNonPersistedChanges(projectId, baseVersion) {
+async function getNonPersistedChanges(projectId, baseVersion, opts = {}) {
   let result
   try {
     result = await rclient.get_non_persisted_changes(
       keySchema.headVersion({ projectId }),
       keySchema.persistedVersion({ projectId }),
       keySchema.changes({ projectId }),
-      baseVersion.toString()
+      baseVersion.toString(),
+      opts.maxChanges ?? 0
     )
   } catch (err) {
     metrics.inc('chunk_store.redis.get_non_persisted_changes', 1, {
@@ -569,6 +587,53 @@ async function setPersistedVersion(projectId, persistedVersion) {
   }
 }
 
+rclient.defineCommand('hard_delete_project', {
+  numberOfKeys: 6,
+  lua: `
+    local headKey = KEYS[1]
+    local headVersionKey = KEYS[2]
+    local persistedVersionKey = KEYS[3]
+    local expireTimeKey = KEYS[4]
+    local persistTimeKey = KEYS[5]
+    local changesKey = KEYS[6]
+    -- Delete all keys associated with the project
+    redis.call('DEL',
+      headKey,
+      headVersionKey,
+      persistedVersionKey,
+      expireTimeKey,
+      persistTimeKey,
+      changesKey
+    )
+      return 'ok'
+  `,
+})
+
+/** Hard delete a project from Redis by removing all keys associated with it.
+ * This is only to be used when a project is **permanently** deleted.
+ * DO NOT USE THIS FOR ANY OTHER PURPOSES AS IT WILL REMOVE NON-PERSISTED CHANGES.
+ * @param {string} projectId - The unique identifier of the project to delete.
+ * @returns {Promise<string>} A Promise that resolves to 'ok' on success.
+ * @throws {Error} If Redis operations fail.
+ */
+async function hardDeleteProject(projectId) {
+  try {
+    const status = await rclient.hard_delete_project(
+      keySchema.head({ projectId }),
+      keySchema.headVersion({ projectId }),
+      keySchema.persistedVersion({ projectId }),
+      keySchema.expireTime({ projectId }),
+      keySchema.persistTime({ projectId }),
+      keySchema.changes({ projectId })
+    )
+    metrics.inc('chunk_store.redis.hard_delete_project', 1, { status })
+    return status
+  } catch (err) {
+    metrics.inc('chunk_store.redis.hard_delete_project', 1, { status: 'error' })
+    throw err
+  }
+}
+
 rclient.defineCommand('set_expire_time', {
   numberOfKeys: 2,
   lua: `
@@ -647,12 +712,12 @@ async function expireProject(projectId) {
       keySchema.persistTime({ projectId }),
       keySchema.expireTime({ projectId })
     )
-    metrics.inc('chunk_store.redis.set_persisted_version', 1, {
+    metrics.inc('chunk_store.redis.expire_project', 1, {
       status,
     })
     return status
   } catch (err) {
-    metrics.inc('chunk_store.redis.set_persisted_version', 1, {
+    metrics.inc('chunk_store.redis.expire_project', 1, {
       status: 'error',
     })
     throw err
@@ -778,6 +843,7 @@ module.exports = {
   getChangesSinceVersion,
   getNonPersistedChanges,
   setPersistedVersion,
+  hardDeleteProject,
   setExpireTime,
   expireProject,
   claimExpireJob,

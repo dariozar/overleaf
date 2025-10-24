@@ -9,15 +9,18 @@ import useDetachAction from '../../../shared/hooks/use-detach-action'
 import localStorage from '../../../infrastructure/local-storage'
 import { useFileTreeData } from '../../../shared/context/file-tree-data-context'
 import useScopeEventListener from '../../../shared/hooks/use-scope-event-listener'
-import * as eventTracking from '../../../infrastructure/event-tracking'
 import { debugConsole } from '@/utils/debugging'
 import { useFileTreePathContext } from '@/features/file-tree/contexts/file-tree-path'
 import { useEditorManagerContext } from '@/features/ide-react/context/editor-manager-context'
+import { useEditorOpenDocContext } from '@/features/ide-react/context/editor-open-doc-context'
 import useEventListener from '@/shared/hooks/use-event-listener'
 import { CursorPosition } from '@/features/ide-react/types/cursor-position'
 import { isValidTeXFile } from '@/main/is-valid-tex-file'
 import { PdfScrollPosition } from '@/shared/hooks/use-pdf-scroll-position'
-import { showFileErrorToast } from '@/features/pdf-preview/components/synctex-toasts'
+import {
+  showFileErrorToast,
+  showSynctexRequestErrorToast,
+} from '@/features/pdf-preview/components/synctex-toasts'
 import { sendMB } from '@/infrastructure/event-tracking'
 
 export default function useSynctex(): {
@@ -27,15 +30,16 @@ export default function useSynctex(): {
   syncToCodeInFlight: boolean
   canSyncToPdf: boolean
 } {
-  const { _id: projectId, rootDocId } = useProjectContext()
+  const { projectId, project } = useProjectContext()
+  const rootDocId = project?.rootDocId
 
   const { clsiServerId, pdfFile, position, setShowLogs, setHighlights } =
     useCompileContext()
 
   const { selectedEntities } = useFileTreeData()
   const { findEntityByPath, dirname, pathInFolder } = useFileTreePathContext()
-  const { getCurrentDocumentId, openDocWithId, openDocName } =
-    useEditorManagerContext()
+  const { openDocName } = useEditorOpenDocContext()
+  const { getCurrentDocumentId, openDocWithId } = useEditorManagerContext()
 
   const [cursorPosition, setCursorPosition] = useState<CursorPosition | null>(
     () => {
@@ -87,12 +91,13 @@ export default function useSynctex(): {
   }, [dirname, getCurrentDocumentId, pathInFolder, rootDocId])
 
   const goToCodeLine = useCallback(
-    (file?: string, line?: number) => {
+    (file?: string, line?: number, selectText?: string) => {
       if (file) {
         const doc = findEntityByPath(file)?.entity
         if (doc) {
           openDocWithId(doc._id, {
             gotoLine: line,
+            selectText,
           })
           return
         }
@@ -123,7 +128,10 @@ export default function useSynctex(): {
             })
           }
         })
-        .catch(debugConsole.error)
+        .catch(error => {
+          showSynctexRequestErrorToast()
+          debugConsole.error(error)
+        })
         .finally(() => {
           if (isMounted.current) {
             setSyncToPdfInFlight(false)
@@ -160,11 +168,6 @@ export default function useSynctex(): {
         column: String(column),
       }).toString()
 
-      eventTracking.sendMB('jump-to-location', {
-        direction: 'code-location-in-pdf',
-        method: 'arrow',
-      })
-
       goToPdfLocation(params)
     }
   }, [getCurrentFilePath, goToPdfLocation])
@@ -184,9 +187,11 @@ export default function useSynctex(): {
   const _syncToCode = useCallback(
     ({
       position = positionRef.current,
+      selectText,
       visualOffset = 0,
     }: {
       position?: PdfScrollPosition
+      selectText?: string
       visualOffset?: number
     }) => {
       if (!position) {
@@ -229,7 +234,7 @@ export default function useSynctex(): {
       getJSON(`/project/${projectId}/sync/pdf?${params}`, { signal })
         .then(data => {
           const [{ file, line }] = data.code
-          goToCodeLine(file, line)
+          goToCodeLine(file, line, selectText)
           if (data.downloadedFromCache) {
             sendMB('synctex-downloaded-from-cache', {
               projectId,
@@ -237,7 +242,10 @@ export default function useSynctex(): {
             })
           }
         })
-        .catch(debugConsole.error)
+        .catch(error => {
+          debugConsole.error(error)
+          showSynctexRequestErrorToast()
+        })
         .finally(() => {
           if (isMounted.current) {
             setSyncToCodeInFlight(false)
@@ -264,10 +272,7 @@ export default function useSynctex(): {
 
   useEventListener(
     'synctex:sync-to-position',
-    useCallback(
-      (event: CustomEvent) => syncToCode({ position: event.detail }),
-      [syncToCode]
-    )
+    useCallback((event: CustomEvent) => syncToCode(event.detail), [syncToCode])
   )
 
   const [hasSingleSelectedDoc, setHasSingleSelectedDoc] = useDetachState(

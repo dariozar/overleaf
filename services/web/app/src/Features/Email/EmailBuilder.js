@@ -280,9 +280,7 @@ templates.projectInvite = ctaTemplate({
     const safeEmail = SpamSafe.isSafeEmail(opts.owner.email)
 
     if (safeName && safeEmail) {
-      return `"${_.escape(opts.project.name)}" — shared by ${_.escape(
-        opts.owner.email
-      )}`
+      return `"${opts.project.name}" — shared by ${_.escape(opts.owner.email)}`
     }
     if (safeName) {
       return `${settings.appName} project shared with you — "${_.escape(
@@ -972,6 +970,35 @@ templates.removeGroupMember = NoCTAEmailTemplate({
       `If you think this has been done in error, please contact your group admin.`,
       `Thanks!`,
       `Team ${settings.appName}`,
+    ]
+  },
+})
+
+templates.taxExemptCertificateRequired = NoCTAEmailTemplate({
+  subject(opts) {
+    return `Action required: Tax exemption verification for Overleaf [${opts.ein}]`
+  },
+  title() {
+    return 'Action required: Tax exemption verification'
+  },
+  greeting() {
+    return ''
+  },
+  message(opts) {
+    return [
+      'Thanks for letting us know your organization is tax exempt. To confirm this, we need some additional verification.',
+      'Please reply to this email with one of the following documents attached:',
+      '<ul>',
+      '<li>Your IRS determination letter (for non-profits and similar organizations)</li>',
+      '<li>Your state resale or exemption certificate</li>',
+      '</ul>',
+      `These should match the EIN you provided: ${opts.ein}.`,
+      'If you have any questions, let us know by replying to this email.',
+      '<br/>',
+      'Best wishes,',
+      'Team Overleaf',
+      '<br/>',
+      `Our reference: ${opts.stripeCustomerId}`,
     ]
   },
 })

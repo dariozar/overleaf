@@ -4,12 +4,10 @@
 
 const { callbackifyAll } = require('@overleaf/promise-utils')
 const { Subscription } = require('../../models/Subscription')
+const SubscriptionHelper = require('./SubscriptionHelper')
 const { DeletedSubscription } = require('../../models/DeletedSubscription')
 const logger = require('@overleaf/logger')
-const {
-  AI_ADD_ON_CODE,
-  isStandaloneAiAddOnPlanCode,
-} = require('./PaymentProviderEntities')
+const { AI_ADD_ON_CODE, isStandaloneAiAddOnPlanCode } = require('./AiHelper')
 require('./GroupPlansData') // make sure dynamic group plans are loaded
 
 const SubscriptionLocator = {
@@ -17,6 +15,11 @@ const SubscriptionLocator = {
     const userId = SubscriptionLocator._getUserId(userOrId)
     const subscription = await Subscription.findOne({ admin_id: userId }).exec()
     logger.debug({ userId }, 'got users subscription')
+
+    if (subscription) {
+      return await SubscriptionHelper.recomputeSubscriptionState(subscription)
+    }
+
     return subscription
   },
 
@@ -91,7 +94,7 @@ const SubscriptionLocator = {
   async getGroupSubscriptionsMemberOf(userId) {
     return await Subscription.find(
       { member_ids: userId },
-      { _id: 1, planCode: 1 }
+      { _id: 1, planCode: 1, userFeaturesDisabled: 1 }
     )
   },
 
@@ -175,7 +178,8 @@ const SubscriptionLocator = {
 
     const hasActiveGroupSubscription = memberSubscriptions.some(
       subscription =>
-        subscription.recurlyStatus?.state === 'active' && subscription.groupPlan
+        subscription.groupPlan &&
+        SubscriptionHelper.getPaidSubscriptionState(subscription) === 'active'
     )
     if (hasActiveGroupSubscription) {
       // Member of a group plan
@@ -187,7 +191,8 @@ const SubscriptionLocator = {
 
     if (personalSubscription) {
       const hasActivePersonalSubscription =
-        personalSubscription.recurlyStatus?.state === 'active'
+        SubscriptionHelper.getPaidSubscriptionState(personalSubscription) ===
+        'active'
       if (hasActivePersonalSubscription) {
         if (personalSubscription.groupPlan) {
           // Owner of a group plan

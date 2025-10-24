@@ -34,7 +34,9 @@ describe('<TagsList />', function () {
     renderWithProjectListContext(<TagsList />)
 
     await fetchMock.callHistory.flush(true)
-    await waitFor(() => expect(fetchMock.callHistory.called('/api/project')))
+    await waitFor(
+      () => expect(fetchMock.callHistory.called('/api/project')).to.be.true
+    )
   })
 
   afterEach(function () {
@@ -173,7 +175,7 @@ describe('<TagsList />', function () {
 
     it('modal is open', async function () {
       const modal = screen.getAllByRole('dialog', { hidden: false })[0]
-      within(modal).getByRole('heading', { name: 'Edit Tag' })
+      within(modal).getByRole('heading', { name: 'Edit tag' })
     })
 
     it('click on cancel closes the modal', async function () {
@@ -241,8 +243,10 @@ describe('<TagsList />', function () {
 
       fireEvent.click(saveButton)
 
-      await waitFor(() =>
-        expect(fetchMock.callHistory.called(`/tag/abc123def456/rename`))
+      await waitFor(
+        () =>
+          expect(fetchMock.callHistory.called(`/tag/abc123def456/edit`)).to.be
+            .true
       )
 
       await waitFor(
@@ -286,8 +290,9 @@ describe('<TagsList />', function () {
       const deleteButton = within(modal).getByRole('button', { name: 'Delete' })
       fireEvent.click(deleteButton)
 
-      await waitFor(() =>
-        expect(fetchMock.callHistory.called(`/tag/bcd234efg567`))
+      await waitFor(
+        () =>
+          expect(fetchMock.callHistory.called(`/tag/abc123def456`)).to.be.true
       )
 
       await waitFor(
@@ -307,8 +312,9 @@ describe('<TagsList />', function () {
       const deleteButton = within(modal).getByRole('button', { name: 'Delete' })
       fireEvent.click(deleteButton)
 
-      await waitFor(() =>
-        expect(fetchMock.callHistory.called(`/tag/bcd234efg567`))
+      await waitFor(
+        () =>
+          expect(fetchMock.callHistory.called('/tag/abc123def456')).to.be.true
       )
 
       await within(modal).findByText('Sorry, something went wrong')

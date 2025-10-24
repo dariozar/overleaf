@@ -1,10 +1,17 @@
 import CodemirrorEditor from '../../../../../frontend/js/features/source-editor/components/codemirror-editor'
-import { EditorProviders } from '../../../helpers/editor-providers'
+import {
+  EditorProviders,
+  makeEditorPropertiesProvider,
+  makeProjectProvider,
+  USER_ID,
+} from '../../../helpers/editor-providers'
 import { mockScope, rootFolderId } from '../helpers/mock-scope'
 import { FC } from 'react'
 import { FileTreePathContext } from '@/features/file-tree/contexts/file-tree-path'
 import { TestContainer } from '../helpers/test-container'
 import getMeta from '@/utils/meta'
+import { mockProject } from '../helpers/mock-project'
+import { base64image } from '../fixtures/image'
 
 const clickToolbarButton = (text: string) => {
   cy.findByLabelText(text).click()
@@ -41,7 +48,11 @@ describe('<FigureModal />', function () {
   function mount() {
     const content = ''
     const scope = mockScope(content)
-    scope.editor.showVisual = true
+    const project = mockProject({
+      projectOwner: {
+        _id: USER_ID,
+      },
+    })
 
     const FileTreePathProvider: FC<React.PropsWithChildren> = ({
       children,
@@ -54,7 +65,7 @@ describe('<FigureModal />', function () {
           previewByPath: cy
             .stub()
             .as('previewByPath')
-            .returns({ url: 'frog.jpg', extension: 'jpg' }),
+            .returns({ url: base64image, extension: 'png' }),
         }}
       >
         {children}
@@ -63,7 +74,17 @@ describe('<FigureModal />', function () {
 
     cy.mount(
       <TestContainer>
-        <EditorProviders scope={scope} providers={{ FileTreePathProvider }}>
+        <EditorProviders
+          scope={scope}
+          providers={{
+            FileTreePathProvider,
+            ProjectProvider: makeProjectProvider(project),
+            EditorPropertiesProvider: makeEditorPropertiesProvider({
+              showVisual: true,
+              showSymbolPalette: false,
+            }),
+          }}
+        >
           <CodemirrorEditor />
         </EditorProviders>
       </TestContainer>
@@ -106,9 +127,11 @@ describe('<FigureModal />', function () {
         matchUrl(`/project/test-project/upload?folder_id=${rootFolderId}`)
       )
 
+      // Note that we have to include the 'edit' text from the edit button's
+      // icon, which is literal text in the document
       cy.get('.cm-content').should(
         'have.text',
-        '\\begin{figure}    \\centering    \\caption{Enter Caption}    🏷fig:enter-label\\end{figure}'
+        '\\begin{figure}    \\centeringedit    \\caption{Enter Caption}    🏷fig:placeholder\\end{figure}'
       )
     })
 
@@ -152,9 +175,12 @@ describe('<FigureModal />', function () {
         cy.findByText('frog.jpg').click()
       })
       cy.findByRole('button', { name: 'Insert figure' }).click()
+
+      // Note that we have to include the 'edit' text from the edit button's
+      // icon, which is literal text in the document
       cy.get('.cm-content').should(
         'have.text',
-        '\\begin{figure}    \\centering    \\caption{Enter Caption}    🏷fig:enter-label\\end{figure}'
+        '\\begin{figure}    \\centeringedit    \\caption{Enter Caption}    🏷fig:placeholder\\end{figure}'
       )
     })
   })
@@ -238,9 +264,11 @@ describe('<FigureModal />', function () {
         },
       })
 
+      // Note that we have to include the 'edit' text from the edit button's
+      // icon, which is literal text in the document
       cy.get('.cm-content').should(
         'have.text',
-        '\\begin{figure}    \\centering    \\caption{Enter Caption}    🏷fig:enter-label\\end{figure}'
+        '\\begin{figure}    \\centeringedit    \\caption{Enter Caption}    🏷fig:placeholder\\end{figure}'
       )
     })
 
@@ -265,9 +293,11 @@ describe('<FigureModal />', function () {
         },
       })
 
+      // Note that we have to include the 'edit' text from the edit button's
+      // icon, which is literal text in the document
       cy.get('.cm-content').should(
         'have.text',
-        '\\begin{figure}    \\centering    \\caption{Enter Caption}    🏷fig:enter-label\\end{figure}'
+        '\\begin{figure}    \\centeringedit    \\caption{Enter Caption}    🏷fig:placeholder\\end{figure}'
       )
     })
   })
@@ -409,9 +439,11 @@ describe('<FigureModal />', function () {
         },
       })
 
+      // Note that we have to include the 'edit' text from the edit button's
+      // icon, which is literal text in the document
       cy.get('.cm-content').should(
         'have.text',
-        '\\begin{figure}    \\centering    \\caption{Enter Caption}    🏷fig:enter-label\\end{figure}'
+        '\\begin{figure}    \\centeringedit    \\caption{Enter Caption}    🏷fig:placeholder\\end{figure}'
       )
     })
 
@@ -435,9 +467,12 @@ describe('<FigureModal />', function () {
 
       // If caption is selected then typing will replace the whole caption
       cy.focused().type('My caption')
+
+      // Note that we have to include the 'edit' text from the edit button's
+      // icon, which is literal text in the document
       cy.get('.cm-content').should(
         'have.text',
-        '\\begin{figure}    \\centering    \\caption{My caption}    🏷fig:enter-label\\end{figure}'
+        '\\begin{figure}    \\centeringedit    \\caption{My caption}    🏷fig:placeholder\\end{figure}'
       )
     })
 
@@ -462,9 +497,12 @@ describe('<FigureModal />', function () {
 
       // If label is selected then typing will replace the whole label
       cy.focused().type('fig:my-label')
+
+      // Note that we have to include the 'edit' text from the edit button's
+      // icon, which is literal text in the document
       cy.get('.cm-content').should(
         'have.text',
-        '\\begin{figure}    \\centering    \\label{fig:my-label}\\end{figure}'
+        '\\begin{figure}    \\centeringedit    \\label{fig:my-label}\\end{figure}'
       )
     })
 
@@ -484,16 +522,18 @@ describe('<FigureModal />', function () {
         },
       })
 
+      // Note that we have to include the 'edit' text from the edit button's
+      // icon, which is literal text in the document
       cy.get('.cm-content').should(
         'have.text',
-        '\\begin{figure}    \\centering\\end{figure}'
+        '\\begin{figure}    \\centeringedit\\end{figure}'
       )
 
       cy.focused().type('Some more text')
 
       cy.get('.cm-content').should(
         'have.text',
-        '\\begin{figure}    \\centering\\end{figure}Some more text'
+        '\\begin{figure}    \\centeringedit\\end{figure}Some more text'
       )
     })
   })
@@ -592,20 +632,22 @@ text below`,
     })
 
     it('Opens figure modal on pasting image', function () {
-      cy.fixture<Uint8Array>('images/gradient.png').then(gradientBuffer => {
-        const gradientFile = new File([gradientBuffer], 'gradient.png', {
-          type: 'image/png',
-        })
-        const clipboardData = new DataTransfer()
-        clipboardData.items.add(gradientFile)
-        cy.wrap(clipboardData.files).should('have.length', 1)
-        cy.get('.cm-content').trigger('paste', { clipboardData })
-        cy.findByText('Upload from computer').should('be.visible')
-        cy.findByLabelText('File name in this project').should(
-          'have.value',
-          'gradient.png'
-        )
-      })
+      cy.fixture<Uint8Array<ArrayBuffer>>('images/gradient.png').then(
+        gradientBuffer => {
+          const gradientFile = new File([gradientBuffer], 'gradient.png', {
+            type: 'image/png',
+          })
+          const clipboardData = new DataTransfer()
+          clipboardData.items.add(gradientFile)
+          cy.wrap(clipboardData.files).should('have.length', 1)
+          cy.get('.cm-content').trigger('paste', { clipboardData })
+          cy.findByText('Upload from computer').should('be.visible')
+          cy.findByLabelText('File name in this project').should(
+            'have.value',
+            'gradient.png'
+          )
+        }
+      )
     })
 
     // TODO: Add tests for replacing image when we can match on image path

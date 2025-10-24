@@ -9,13 +9,15 @@ import useIsMounted from '@/shared/hooks/use-is-mounted'
 import { useProjectContext } from '@/shared/context/project-context'
 import { sendMB } from '@/infrastructure/event-tracking'
 import ClickableElementEnhancer from '@/shared/components/clickable-element-enhancer'
-import OLForm from '@/features/ui/components/ol/ol-form'
-import OLFormGroup from '@/features/ui/components/ol/ol-form-group'
+import OLForm from '@/shared/components/ol/ol-form'
+import OLFormGroup from '@/shared/components/ol/ol-form-group'
 import { Select } from '@/shared/components/select'
-import OLButton from '@/features/ui/components/ol/ol-button'
+import OLButton from '@/shared/components/ol/ol-button'
+import { PermissionsLevel } from '@/features/ide-react/types/permissions'
+import OLFormText from '@/shared/components/ol/ol-form-text'
 
 export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
-  const [privileges, setPrivileges] = useState('readAndWrite')
+  const [privileges, setPrivileges] = useState<PermissionsLevel>('readAndWrite')
 
   const isMounted = useIsMounted()
 
@@ -23,9 +25,10 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
 
   const { t } = useTranslation()
 
-  const { updateProject, setInFlight, setError } = useShareProjectContext()
+  const { setInFlight, setError } = useShareProjectContext()
 
-  const { _id: projectId, members, invites, features } = useProjectContext()
+  const { projectId, project, features, updateProject } = useProjectContext()
+  const { members, invites } = project || {}
 
   const currentMemberEmails = useMemo(
     () => (members || []).map(member => member.email).sort(),
@@ -82,9 +85,7 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
       let data
 
       try {
-        const invite = (invites || []).find(
-          invite => invite.email === normalisedEmail
-        )
+        const invite = invites?.find(invite => invite.email === normalisedEmail)
 
         if (invite) {
           data = await resendInvite(projectId, invite)
@@ -109,8 +110,8 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
           // invitation is only populated on successful invite, meaning that for paywall and other cases this will be null
           successful_invite: !!data.invite,
           users_updated: !!(data.users || data.user),
-          current_collaborators_amount: members.length,
-          current_invites_amount: invites.length,
+          current_collaborators_amount: members?.length || 0,
+          current_invites_amount: invites?.length || 0,
           role,
           previousEditorsAmount,
           previousReviewersAmount,
@@ -144,15 +145,15 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
         setInFlight(false)
       } else if (data.invite) {
         updateProject({
-          invites: invites.concat(data.invite),
+          invites: invites?.concat(data.invite) || [data.invite],
         })
       } else if (data.users) {
         updateProject({
-          members: members.concat(data.users),
+          members: members?.concat(data.users) || data.users,
         })
       } else if (data.user) {
         updateProject({
-          members: members.concat(data.user),
+          members: members?.concat(data.user) || [data.user],
         })
       }
 
@@ -176,24 +177,34 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
   ])
 
   const privilegeOptions = useMemo(() => {
-    return [
+    const options: {
+      key: PermissionsLevel
+      label: string
+      description?: string | null
+    }[] = [
       {
         key: 'readAndWrite',
         label: t('editor'),
       },
-      {
+    ]
+
+    if (features.trackChangesVisible) {
+      options.push({
         key: 'review',
         label: t('reviewer'),
         description: !features.trackChanges
           ? t('comment_only_upgrade_for_track_changes')
           : null,
-      },
-      {
-        key: 'readOnly',
-        label: t('viewer'),
-      },
-    ]
-  }, [features.trackChanges, t])
+      })
+    }
+
+    options.push({
+      key: 'readOnly',
+      label: t('viewer'),
+    })
+
+    return options
+  }, [features.trackChanges, features.trackChangesVisible, t])
 
   return (
     <OLForm className="add-collabs">
@@ -201,13 +212,14 @@ export default function AddCollaborators({ readOnly }: { readOnly?: boolean }) {
         <SelectCollaborators
           loading={!nonMemberContacts}
           options={nonMemberContacts || []}
-          placeholder="Email, comma separated"
           multipleSelectionProps={multipleSelectionProps}
         />
+        <OLFormText id="add-collaborator-help-text">
+          {t('add_comma_separated_emails_help')}
+        </OLFormText>
       </OLFormGroup>
-
       <OLFormGroup>
-        <div className="pull-right add-collaborator-controls">
+        <div className="float-end add-collaborator-controls">
           <Select
             dataTestId="add-collaborator-select"
             items={privilegeOptions}

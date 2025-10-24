@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next'
+import { useTranslation, Trans } from 'react-i18next'
 import { FetchError } from '../../../../infrastructure/fetch-json'
 import RedirectToLogin from './redirect-to-login'
 import {
@@ -7,6 +7,7 @@ import {
   InvalidFilenameError,
 } from '../../errors'
 import DangerMessage from './danger-message'
+import getMeta from '@/utils/meta'
 
 // TODO: Update the error type when we properly type FileTreeActionableContext
 export default function ErrorMessage({
@@ -15,6 +16,7 @@ export default function ErrorMessage({
   error: string | Record<string, any>
 }) {
   const { t } = useTranslation()
+  const { isOverleaf, maxEntitiesPerProject } = getMeta('ol-ExposedSettings')
   const fileNameLimit = 150
 
   // the error is a string
@@ -25,7 +27,13 @@ export default function ErrorMessage({
         return <DangerMessage>{t('file_already_exists')}</DangerMessage>
 
       case 'too-many-files':
-        return <DangerMessage>{t('project_has_too_many_files')}</DangerMessage>
+        return (
+          <DangerMessage>
+            {t('project_has_too_many_files_limit', {
+              limit: maxEntitiesPerProject,
+            })}
+          </DangerMessage>
+        )
 
       case 'remote-service-error':
         return <DangerMessage>{t('remote_service_error')}</DangerMessage>
@@ -43,6 +51,22 @@ export default function ErrorMessage({
             {t('invalid_filename', {
               nameLimit: fileNameLimit,
             })}
+          </DangerMessage>
+        )
+
+      case 'invalid_upload_request':
+        if (!isOverleaf) {
+          return (
+            <DangerMessage>{t('generic_something_went_wrong')}</DangerMessage>
+          )
+        }
+        return (
+          <DangerMessage>
+            <Trans
+              i18nKey="invalid_upload_request"
+              // eslint-disable-next-line jsx-a11y/anchor-has-content, react/jsx-key
+              components={[<a href="/contact" target="_blank" />]}
+            />
           </DangerMessage>
         )
 

@@ -5,10 +5,11 @@ import { useCombobox, UseMultipleSelectionReturnValue } from 'downshift'
 import classnames from 'classnames'
 
 import MaterialIcon from '@/shared/components/material-icon'
-import Tag from '@/features/ui/components/bootstrap-5/tag'
-import { DropdownItem } from '@/features/ui/components/bootstrap-5/dropdown-menu'
-import { Spinner } from 'react-bootstrap'
+import Tag from '@/shared/components/tag'
+import { DropdownItem } from '@/shared/components/dropdown/dropdown-menu'
 import { Contact } from '../utils/types'
+import OLFormLabel from '@/shared/components/ol/ol-form-label'
+import OLSpinner from '@/shared/components/ol/ol-spinner'
 
 export type ContactItem = {
   email: string
@@ -25,12 +26,10 @@ const matchAllSpaces =
 export default function SelectCollaborators({
   loading,
   options,
-  placeholder,
   multipleSelectionProps,
 }: {
   loading: boolean
   options: Contact[]
-  placeholder: string
   multipleSelectionProps: UseMultipleSelectionReturnValue<ContactItem>
 }) {
   const { t } = useTranslation()
@@ -166,20 +165,10 @@ export default function SelectCollaborators({
   return (
     <div className="tags-input tags-new">
       {/* eslint-disable-next-line jsx-a11y/label-has-for */}
-      <label className="small" {...getLabelProps()}>
-        <strong>
-          {t('add_people')}
-          &nbsp;
-        </strong>
-        {loading && (
-          <Spinner
-            animation="border"
-            aria-hidden="true"
-            size="sm"
-            role="status"
-          />
-        )}
-      </label>
+      <OLFormLabel className="small" {...getLabelProps()}>
+        {t('add_email_address')}
+        {loading && <OLSpinner size="sm" className="ms-2" />}
+      </OLFormLabel>
 
       <div className="host">
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
@@ -197,16 +186,14 @@ export default function SelectCollaborators({
 
           <input
             data-testid="collaborator-email-input"
+            aria-describedby="add-collaborator-help-text"
             {...getInputProps(
               getDropdownProps({
                 className: classnames('input', {
                   'invalid-tag': !isValidInput,
                 }),
                 type: 'email',
-                placeholder,
-                size: inputValue.length
-                  ? inputValue.length + 5
-                  : placeholder.length,
+                size: inputValue.length ? inputValue.length + 5 : 5,
                 ref: inputRef,
                 // preventKeyAction: showDropdown,
                 onBlur: () => {
@@ -250,12 +237,18 @@ export default function SelectCollaborators({
                     const emails = data
                       .split(/[\r\n,; ]+/)
                       .filter(item => item.includes('@'))
+                      .map(email => email.replace(matchAllSpaces, ''))
 
                     if (emails.length) {
                       // pasted comma-separated email addresses
                       event.preventDefault()
 
-                      for (const email of emails) {
+                      // dedupe emails in pasted content and previously-entered items
+                      const uniqueEmails = [...new Set(emails)].filter(
+                        email => !selectedEmails.includes(email)
+                      )
+
+                      for (const email of uniqueEmails) {
                         addNewItem(email)
                       }
                     }

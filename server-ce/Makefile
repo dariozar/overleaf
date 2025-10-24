@@ -13,6 +13,18 @@ export OVERLEAF_TAG ?= sharelatex/sharelatex:$(BRANCH_NAME)-$(MONOREPO_REVISION)
 
 all: build-base build-community
 
+clean:
+	-docker rmi --force $(OVERLEAF_BASE_TAG) $(OVERLEAF_TAG)
+
+refresh-cache: refresh-cache-branch
+refresh-cache-branch:
+	docker inspect $(OVERLEAF_BASE_BRANCH) > /dev/null && docker pull $(OVERLEAF_BASE_BRANCH) || true
+	docker inspect $(OVERLEAF_BRANCH) > /dev/null && docker pull $(OVERLEAF_BRANCH) || true
+refresh-cache: refresh-cache-latest
+refresh-cache-latest:
+	docker inspect $(OVERLEAF_BASE_LATEST) > /dev/null && docker pull $(OVERLEAF_BASE_LATEST) || true
+	docker inspect $(OVERLEAF_LATEST) > /dev/null && docker pull $(OVERLEAF_LATEST) || true
+
 build-base:
 	cp .dockerignore $(MONOREPO_ROOT)
 	docker build \
@@ -33,13 +45,19 @@ build-community:
 	  --build-arg BUILDKIT_INLINE_CACHE=1 \
 	  --progress=plain \
 	  --build-arg OVERLEAF_BASE_TAG \
-	  --build-arg MONOREPO_REVISION \
+	  --label "com.overleaf.ce.revision=$(MONOREPO_REVISION)" \
 	  --cache-from $(OVERLEAF_LATEST) \
 	  --cache-from $(OVERLEAF_BRANCH) \
 	  --file Dockerfile \
 	  --tag $(OVERLEAF_TAG) \
 	  --tag $(OVERLEAF_BRANCH) \
 	  $(MONOREPO_ROOT)
+
+push:
+	docker push $(OVERLEAF_BASE_TAG)
+	docker push $(OVERLEAF_BASE_BRANCH)
+	docker push $(OVERLEAF_TAG)
+	docker push $(OVERLEAF_BRANCH)
 
 SHELLCHECK_OPTS = \
 	--shell=bash \

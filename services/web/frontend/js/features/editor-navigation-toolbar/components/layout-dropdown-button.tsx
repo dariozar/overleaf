@@ -1,12 +1,11 @@
 import { memo, useCallback, forwardRef } from 'react'
-import { Spinner } from 'react-bootstrap'
 import {
   Dropdown,
   DropdownItem,
   DropdownMenu,
   DropdownToggle,
   DropdownToggleCustom,
-} from '@/features/ui/components/bootstrap-5/dropdown-menu'
+} from '@/shared/components/dropdown/dropdown-menu'
 import { Trans, useTranslation } from 'react-i18next'
 import {
   IdeLayout,
@@ -17,7 +16,8 @@ import * as eventTracking from '../../../infrastructure/event-tracking'
 import useEventListener from '../../../shared/hooks/use-event-listener'
 import { DetachRole } from '@/shared/context/detach-context'
 import MaterialIcon from '@/shared/components/material-icon'
-import OLTooltip from '@/features/ui/components/ol/ol-tooltip'
+import OLTooltip from '@/shared/components/ol/ol-tooltip'
+import OLSpinner from '@/shared/components/ol/ol-spinner'
 
 const isActiveDropdownItem = ({
   iconFor,
@@ -171,24 +171,18 @@ export const LayoutDropdownButtonUi = ({
   const { t } = useTranslation()
   return (
     <>
-      {processing && (
-        <div aria-live="assertive" className="sr-only">
-          {t('layout_processing')}
-        </div>
-      )}
+      <div aria-live="assertive" className="visually-hidden" id="layout-status">
+        {processing ? t('layout_processing') : ''}
+      </div>
       <Dropdown className="toolbar-item layout-dropdown" align="end">
         <DropdownToggle
+          aria-describedby={processing ? 'layout-status' : undefined}
           id="layout-dropdown-btn"
           className="btn-full-height"
           as={LayoutDropdownToggleButton}
         >
           {processing ? (
-            <Spinner
-              animation="border"
-              aria-hidden="true"
-              size="sm"
-              role="status"
-            />
+            <OLSpinner size="sm" />
           ) : (
             <MaterialIcon type="dock_to_right" className="align-middle" />
           )}
@@ -257,15 +251,7 @@ export const LayoutDropdownButtonUi = ({
                   detachIsLinked ? (
                     'check'
                   ) : (
-                    <span className="spinner-container">
-                      <Spinner
-                        animation="border"
-                        aria-hidden="true"
-                        size="sm"
-                        role="status"
-                      />
-                      <span className="visually-hidden">{t('loading')}</span>
-                    </span>
+                    <OLSpinner size="sm" />
                   )
                 ) : null
               }

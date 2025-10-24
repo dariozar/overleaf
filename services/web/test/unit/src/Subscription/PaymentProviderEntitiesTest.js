@@ -4,13 +4,15 @@ const SandboxedModule = require('sandboxed-module')
 const { expect } = require('chai')
 const Errors = require('../../../../app/src/Features/Subscription/Errors')
 const {
-  AI_ADD_ON_CODE,
   PaymentProviderSubscriptionChangeRequest,
   PaymentProviderSubscriptionUpdateRequest,
   PaymentProviderSubscriptionChange,
   PaymentProviderSubscription,
   PaymentProviderSubscriptionAddOnUpdate,
 } = require('../../../../app/src/Features/Subscription/PaymentProviderEntities')
+const {
+  AI_ADD_ON_CODE,
+} = require('../../../../app/src/Features/Subscription/AiHelper')
 const SubscriptionHelper = require('../../../../app/src/Features/Subscription/SubscriptionHelper')
 
 const MODULE_PATH =
@@ -25,6 +27,10 @@ describe('PaymentProviderEntities', function () {
           { planCode: 'cheap-plan', price_in_cents: 500 },
           { planCode: 'regular-plan', price_in_cents: 1000 },
           { planCode: 'premium-plan', price_in_cents: 2000 },
+          {
+            planCode: 'group_collaborator_10_enterprise',
+            price_in_cents: 10000,
+          },
         ],
         features: [],
       }
@@ -79,8 +85,11 @@ describe('PaymentProviderEntities', function () {
         it('returns a change request for upgrades', function () {
           const { PaymentProviderSubscriptionChangeRequest } =
             this.PaymentProviderEntities
-          const changeRequest =
-            this.subscription.getRequestForPlanChange('premium-plan')
+          const changeRequest = this.subscription.getRequestForPlanChange(
+            'premium-plan',
+            1,
+            this.subscription.shouldPlanChangeAtTermEnd('premium-plan')
+          )
           expect(changeRequest).to.deep.equal(
             new PaymentProviderSubscriptionChangeRequest({
               subscription: this.subscription,
@@ -93,8 +102,11 @@ describe('PaymentProviderEntities', function () {
         it('returns a change request for downgrades', function () {
           const { PaymentProviderSubscriptionChangeRequest } =
             this.PaymentProviderEntities
-          const changeRequest =
-            this.subscription.getRequestForPlanChange('cheap-plan')
+          const changeRequest = this.subscription.getRequestForPlanChange(
+            'cheap-plan',
+            1,
+            this.subscription.shouldPlanChangeAtTermEnd('cheap-plan')
+          )
           expect(changeRequest).to.deep.equal(
             new PaymentProviderSubscriptionChangeRequest({
               subscription: this.subscription,
@@ -110,8 +122,11 @@ describe('PaymentProviderEntities', function () {
           this.subscription.trialPeriodEnd = fiveDaysFromNow
           const { PaymentProviderSubscriptionChangeRequest } =
             this.PaymentProviderEntities
-          const changeRequest =
-            this.subscription.getRequestForPlanChange('cheap-plan')
+          const changeRequest = this.subscription.getRequestForPlanChange(
+            'cheap-plan',
+            1,
+            this.subscription.shouldPlanChangeAtTermEnd('cheap-plan')
+          )
           expect(changeRequest).to.deep.equal(
             new PaymentProviderSubscriptionChangeRequest({
               subscription: this.subscription,
@@ -125,8 +140,11 @@ describe('PaymentProviderEntities', function () {
           const { PaymentProviderSubscriptionChangeRequest } =
             this.PaymentProviderEntities
           this.addOn.code = AI_ADD_ON_CODE
-          const changeRequest =
-            this.subscription.getRequestForPlanChange('premium-plan')
+          const changeRequest = this.subscription.getRequestForPlanChange(
+            'premium-plan',
+            1,
+            this.subscription.shouldPlanChangeAtTermEnd('premium-plan')
+          )
           expect(changeRequest).to.deep.equal(
             new PaymentProviderSubscriptionChangeRequest({
               subscription: this.subscription,
@@ -146,8 +164,11 @@ describe('PaymentProviderEntities', function () {
           const { PaymentProviderSubscriptionChangeRequest } =
             this.PaymentProviderEntities
           this.addOn.code = AI_ADD_ON_CODE
-          const changeRequest =
-            this.subscription.getRequestForPlanChange('cheap-plan')
+          const changeRequest = this.subscription.getRequestForPlanChange(
+            'cheap-plan',
+            1,
+            this.subscription.shouldPlanChangeAtTermEnd('cheap-plan')
+          )
           expect(changeRequest).to.deep.equal(
             new PaymentProviderSubscriptionChangeRequest({
               subscription: this.subscription,
@@ -168,14 +189,74 @@ describe('PaymentProviderEntities', function () {
             this.PaymentProviderEntities
           this.subscription.planCode = 'assistant-annual'
           this.subscription.addOns = []
-          const changeRequest =
-            this.subscription.getRequestForPlanChange('cheap-plan')
+          const changeRequest = this.subscription.getRequestForPlanChange(
+            'cheap-plan',
+            1,
+            this.subscription.shouldPlanChangeAtTermEnd('cheap-plan')
+          )
           expect(changeRequest).to.deep.equal(
             new PaymentProviderSubscriptionChangeRequest({
               subscription: this.subscription,
               timeframe: 'now',
               planCode: 'cheap-plan',
               addOnUpdates: [
+                new PaymentProviderSubscriptionAddOnUpdate({
+                  code: AI_ADD_ON_CODE,
+                  quantity: 1,
+                }),
+              ],
+            })
+          )
+        })
+
+        it('upgrade from individual to group plan for Stripe subscription', function () {
+          this.subscription.service = 'stripe-uk'
+          const { PaymentProviderSubscriptionChangeRequest } =
+            this.PaymentProviderEntities
+          const changeRequest = this.subscription.getRequestForPlanChange(
+            'group_collaborator',
+            10,
+            this.subscription.shouldPlanChangeAtTermEnd(
+              'group_collaborator_10_enterprise'
+            )
+          )
+          expect(changeRequest).to.deep.equal(
+            new PaymentProviderSubscriptionChangeRequest({
+              subscription: this.subscription,
+              timeframe: 'now',
+              planCode: 'group_collaborator',
+              addOnUpdates: [
+                new PaymentProviderSubscriptionAddOnUpdate({
+                  code: 'additional-license',
+                  quantity: 10,
+                }),
+              ],
+            })
+          )
+        })
+
+        it('upgrade from individual to group plan and preserves the AI add-on for Stripe subscription', function () {
+          this.subscription.service = 'stripe-uk'
+          const { PaymentProviderSubscriptionChangeRequest } =
+            this.PaymentProviderEntities
+          this.addOn.code = AI_ADD_ON_CODE
+          const changeRequest = this.subscription.getRequestForPlanChange(
+            'group_collaborator',
+            10,
+            this.subscription.shouldPlanChangeAtTermEnd(
+              'group_collaborator_10_enterprise'
+            )
+          )
+          expect(changeRequest).to.deep.equal(
+            new PaymentProviderSubscriptionChangeRequest({
+              subscription: this.subscription,
+              timeframe: 'now',
+              planCode: 'group_collaborator',
+              addOnUpdates: [
+                new PaymentProviderSubscriptionAddOnUpdate({
+                  code: 'additional-license',
+                  quantity: 10,
+                }),
                 new PaymentProviderSubscriptionAddOnUpdate({
                   code: AI_ADD_ON_CODE,
                   quantity: 1,
@@ -322,6 +403,14 @@ describe('PaymentProviderEntities', function () {
         })
       })
 
+      describe('getRequestForAddOnReactivation()', function () {
+        it('throws an AddOnNotPresentError', function () {
+          expect(() =>
+            this.subscription.getRequestForAddOnReactivation(this.addOn.code)
+          ).to.throw(Errors.AddOnNotPresentError)
+        })
+      })
+
       describe('getRequestForGroupPlanUpgrade()', function () {
         it('returns a correct change request', function () {
           const changeRequest =
@@ -373,58 +462,168 @@ describe('PaymentProviderEntities', function () {
         })
       })
 
-      describe('without add-ons', function () {
+      describe('with an add-on pending cancellation', function () {
         beforeEach(function () {
-          const { PaymentProviderSubscription } = this.PaymentProviderEntities
-          this.subscription = new PaymentProviderSubscription({
-            id: 'subscription-id',
-            userId: 'user-id',
-            planCode: 'regular-plan',
-            planName: 'My Plan',
-            planPrice: 10,
-            subtotal: 10.99,
-            taxRate: 0.2,
-            taxAmount: 2.4,
-            total: 14.4,
-            currency: 'USD',
-          })
+          this.subscription.pendingChange =
+            new PaymentProviderSubscriptionChange({
+              subscription: this.subscription,
+              nextPlanCode: this.subscription.planCode,
+              nextPlanName: this.subscription.planName,
+              nextPlanPrice: this.subscription.planPrice,
+              nextAddOns: [],
+            })
         })
 
-        describe('hasAddOn()', function () {
-          it('returns false for any add-on', function () {
-            expect(this.subscription.hasAddOn('some-add-on')).to.be.false
-          })
-        })
-
-        describe('getRequestForAddOnPurchase()', function () {
+        describe('getRequestForAddOnReactivation()', function () {
           it('returns a change request', function () {
-            const {
-              PaymentProviderSubscriptionChangeRequest,
-              PaymentProviderSubscriptionAddOnUpdate,
-            } = this.PaymentProviderEntities
             const changeRequest =
-              this.subscription.getRequestForAddOnPurchase('some-add-on')
+              this.subscription.getRequestForAddOnReactivation(this.addOn.code)
             expect(changeRequest).to.deep.equal(
               new PaymentProviderSubscriptionChangeRequest({
                 subscription: this.subscription,
-                timeframe: 'now',
-                addOnUpdates: [
-                  new PaymentProviderSubscriptionAddOnUpdate({
-                    code: 'some-add-on',
-                    quantity: 1,
-                  }),
-                ],
+                timeframe: 'term_end',
+                addOnUpdates: [this.addOn.toAddOnUpdate()],
               })
             )
           })
-        })
 
-        describe('getRequestForAddOnRemoval()', function () {
-          it('throws an AddOnNotPresentError', function () {
+          it('throws an AddOnNotPresentError if given the wrong add-on', function () {
             expect(() =>
-              this.subscription.getRequestForAddOnRemoval('some-add-on')
+              this.subscription.getRequestForAddOnReactivation('some-add-on')
             ).to.throw(Errors.AddOnNotPresentError)
           })
+        })
+
+        describe('getRequestForPlanRevert()', function () {
+          beforeEach(function () {
+            const { PaymentProviderSubscription } = this.PaymentProviderEntities
+            this.subscription = new PaymentProviderSubscription({
+              id: 'subscription-id',
+              userId: 'user-id',
+              planCode: 'regular-plan',
+              planName: 'My Plan',
+              planPrice: 10,
+              addOns: [
+                {
+                  addOnCode: 'addon-1',
+                  quantity: 2,
+                  unitAmountInCents: 500,
+                },
+                {
+                  addOnCode: 'addon-2',
+                  quantity: 1,
+                  unitAmountInCents: 600,
+                },
+              ],
+              subtotal: 10.99,
+              taxRate: 0.2,
+              taxAmount: 2.4,
+              total: 14.4,
+              currency: 'USD',
+            })
+          })
+
+          it('throws if the plan to revert to doesnt exist', function () {
+            const invalidPlanCode = 'non-existent-plan'
+            expect(() =>
+              this.subscription.getRequestForPlanRevert(invalidPlanCode, null)
+            ).to.throw('Unable to find plan in settings')
+          })
+
+          it('creates a change request with the restore point', function () {
+            const previousPlanCode = 'cheap-plan'
+            const previousAddOns = [
+              { addOnCode: 'addon-1', quantity: 1, unitAmountInCents: 500 },
+            ]
+            const changeRequest = this.subscription.getRequestForPlanRevert(
+              previousPlanCode,
+              previousAddOns
+            )
+            expect(changeRequest).to.be.an.instanceOf(
+              this.PaymentProviderEntities
+                .PaymentProviderSubscriptionChangeRequest
+            )
+            expect(changeRequest.planCode).to.equal(previousPlanCode)
+            expect(changeRequest.addOnUpdates).to.deep.equal([
+              {
+                code: 'addon-1',
+                quantity: 1,
+                unitPrice: 5,
+              },
+            ])
+          })
+
+          it('defaults to addons to an empty array to clear the addon state', function () {
+            const previousPlanCode = 'cheap-plan'
+            const changeRequest = this.subscription.getRequestForPlanRevert(
+              previousPlanCode,
+              null
+            )
+            expect(changeRequest.addOnUpdates).to.deep.equal([])
+          })
+        })
+      })
+    })
+
+    describe('without add-ons', function () {
+      beforeEach(function () {
+        const { PaymentProviderSubscription } = this.PaymentProviderEntities
+        this.subscription = new PaymentProviderSubscription({
+          id: 'subscription-id',
+          userId: 'user-id',
+          planCode: 'regular-plan',
+          planName: 'My Plan',
+          planPrice: 10,
+          subtotal: 10.99,
+          taxRate: 0.2,
+          taxAmount: 2.4,
+          total: 14.4,
+          currency: 'USD',
+        })
+      })
+
+      describe('hasAddOn()', function () {
+        it('returns false for any add-on', function () {
+          expect(this.subscription.hasAddOn('some-add-on')).to.be.false
+        })
+      })
+
+      describe('getRequestForAddOnPurchase()', function () {
+        it('returns a change request', function () {
+          const {
+            PaymentProviderSubscriptionChangeRequest,
+            PaymentProviderSubscriptionAddOnUpdate,
+          } = this.PaymentProviderEntities
+          const changeRequest =
+            this.subscription.getRequestForAddOnPurchase('some-add-on')
+          expect(changeRequest).to.deep.equal(
+            new PaymentProviderSubscriptionChangeRequest({
+              subscription: this.subscription,
+              timeframe: 'now',
+              addOnUpdates: [
+                new PaymentProviderSubscriptionAddOnUpdate({
+                  code: 'some-add-on',
+                  quantity: 1,
+                }),
+              ],
+            })
+          )
+        })
+      })
+
+      describe('getRequestForAddOnRemoval()', function () {
+        it('throws an AddOnNotPresentError', function () {
+          expect(() =>
+            this.subscription.getRequestForAddOnRemoval('some-add-on')
+          ).to.throw(Errors.AddOnNotPresentError)
+        })
+      })
+
+      describe('getRequestForAddOnReactivation()', function () {
+        it('throws an AddOnNotPresentError', function () {
+          expect(() =>
+            this.subscription.getRequestForAddOnReactivation('some-add-on')
+          ).to.throw(Errors.AddOnNotPresentError)
         })
       })
     })

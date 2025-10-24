@@ -7,21 +7,33 @@ import {
   useCallback,
   useMemo,
   useState,
+  useRef,
 } from 'react'
 import { useIdeReactContext } from '@/features/ide-react/context/ide-react-context'
 import { useConnectionContext } from '@/features/ide-react/context/connection-context'
-import { postJSON } from '@/infrastructure/fetch-json'
 import { ShareJsDoc } from '@/features/ide-react/editor/share-js-doc'
 import { useFileTreeData } from '@/shared/context/file-tree-data-context'
 import { findDocEntityById } from '@/features/ide-react/util/find-doc-entity-by-id'
 import { IdeEvents } from '@/features/ide-react/create-ide-event-emitter'
-import { debugConsole } from '@/utils/debugging'
 import useEventListener from '@/shared/hooks/use-event-listener'
+import { useProjectContext } from '@/shared/context/project-context'
+import { useEditorManagerContext } from './editor-manager-context'
+import { signalWithTimeout } from '@/utils/abort-signal'
+import { postJSON } from '@/infrastructure/fetch-json'
+import { debugConsole } from '@/utils/debugging'
+import { useFeatureFlag } from '@/shared/context/split-test-context'
+import type { ReferenceIndexer } from '../references/reference-indexer'
+import { AdvancedReferenceSearchResult } from '@/features/ide-react/references/types'
+import clientId from '@/utils/client-id'
+import { sendMBOnce } from '@/infrastructure/event-tracking'
 
 export const ReferencesContext = createContext<
   | {
       referenceKeys: Set<string>
       indexAllReferences: (shouldBroadcast: boolean) => Promise<void>
+      searchLocalReferences: (
+        query: string
+      ) => Promise<AdvancedReferenceSearchResult>
     }
   | undefined
 >(undefined)
@@ -30,16 +42,21 @@ export const ReferencesProvider: FC<React.PropsWithChildren> = ({
   children,
 }) => {
   const { fileTreeData } = useFileTreeData()
-  const { eventEmitter, projectId } = useIdeReactContext()
+  const { eventEmitter, projectId, permissionsLevel, projectJoined } =
+    useIdeReactContext()
   const { socket } = useConnectionContext()
+  const { projectSnapshot } = useProjectContext()
+  const { openDocs } = useEditorManagerContext()
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const [referenceKeys, setReferenceKeys] = useState(new Set<string>())
+  const clientSideReferences = useFeatureFlag('client-side-references')
 
   const [existingIndexHash, setExistingIndexHash] = useState<
     Record<string, { hash: string; timestamp: number }>
   >({})
 
-  const indexAllReferences = useCallback(
+  const indexAllReferencesServerside = useCallback(
     async (shouldBroadcast: boolean) => {
       return postJSON(`/project/${projectId}/references/indexAll`, {
         body: {
@@ -56,6 +73,59 @@ export const ReferencesProvider: FC<React.PropsWithChildren> = ({
     },
     [projectId]
   )
+
+  const indexerRef = useRef<Promise<ReferenceIndexer> | null>(null)
+  if (clientSideReferences && indexerRef.current === null) {
+    indexerRef.current = import('../references/reference-indexer').then(
+      m => new m.ReferenceIndexer()
+    )
+  }
+
+  const indexAllReferencesLocally = useCallback(
+    async (shouldBroadcast: boolean) => {
+      if (permissionsLevel === 'readOnly') {
+        // Not going to search the references, so let's not index them.
+        return
+      }
+      sendMBOnce('client-side-references-index')
+      abortControllerRef.current?.abort()
+
+      if (!indexerRef.current) {
+        return
+      }
+
+      abortControllerRef.current = new AbortController()
+      const signal = abortControllerRef.current.signal
+
+      await openDocs.awaitBufferedOps(signalWithTimeout(signal, 5000))
+      await projectSnapshot.refresh()
+
+      if (signal.aborted) {
+        return
+      }
+
+      const indexer = await indexerRef.current
+      const keys = await indexer.updateFromSnapshot(projectSnapshot, { signal })
+      if (signal.aborted) {
+        return
+      }
+      setReferenceKeys(keys)
+      if (shouldBroadcast) {
+        // Inform other clients about change in keys
+        await postJSON(`/project/${projectId}/references/indexAll`, {
+          body: { shouldBroadcast: true, clientId: clientId.get() },
+        }).catch(error => {
+          // allow the request to fail
+          debugConsole.error(error)
+        })
+      }
+    },
+    [projectSnapshot, openDocs, projectId, permissionsLevel]
+  )
+
+  const indexAllReferences = clientSideReferences
+    ? indexAllReferencesLocally
+    : indexAllReferencesServerside
 
   const indexReferencesIfDocModified = useCallback(
     (doc: ShareJsDoc, shouldBroadcast: boolean) => {
@@ -110,31 +180,62 @@ export const ReferencesProvider: FC<React.PropsWithChildren> = ({
     }, [indexAllReferences])
   )
 
+  const doneInitialIndex = useRef(false)
   useEffect(() => {
-    const handleProjectJoined = () => {
-      // We only need to grab the references when the editor first loads,
-      // not on every reconnect
-      socket.on('references:keys:updated', (keys, allDocs) => {
-        setReferenceKeys(oldKeys =>
-          allDocs ? new Set(keys) : new Set([...oldKeys, ...keys])
-        )
-      })
+    // We wait for projectJoined to ensure that the correct permission level
+    // has been received and stored on the client.
+    if (projectJoined && !doneInitialIndex.current) {
+      doneInitialIndex.current = true
       indexAllReferences(false)
     }
 
-    eventEmitter.once('project:joined', handleProjectJoined)
+    if (projectJoined && socket) {
+      const processUpdatedReferenceKeys = (
+        keys: string[],
+        allDocs: boolean,
+        refresherId: string
+      ) => {
+        if (clientSideReferences) {
+          if (refresherId === clientId.get()) {
+            // We asked for this broadcast, so we must have already done the indexing
+            return
+          }
+          indexAllReferences(false)
+        } else {
+          setReferenceKeys(oldDocs =>
+            allDocs ? new Set(keys) : new Set([...oldDocs, ...keys])
+          )
+        }
+      }
 
-    return () => {
-      eventEmitter.off('project:joined', handleProjectJoined)
+      socket.on('references:keys:updated', processUpdatedReferenceKeys)
+      return () => {
+        socket.removeListener(
+          'references:keys:updated',
+          processUpdatedReferenceKeys
+        )
+      }
     }
-  }, [eventEmitter, indexAllReferences, socket])
+  }, [projectJoined, indexAllReferences, socket, clientSideReferences])
+
+  const searchLocalReferences = useCallback(
+    async (query: string): Promise<AdvancedReferenceSearchResult> => {
+      if (!indexerRef.current) {
+        return { hits: [] }
+      }
+      const indexer = await indexerRef.current
+      return await indexer.search(query)
+    },
+    []
+  )
 
   const value = useMemo(
     () => ({
       referenceKeys,
       indexAllReferences,
+      searchLocalReferences,
     }),
-    [indexAllReferences, referenceKeys]
+    [indexAllReferences, referenceKeys, searchLocalReferences]
   )
 
   return (

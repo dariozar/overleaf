@@ -13,6 +13,7 @@ const {
 const logger = require('@overleaf/logger')
 const Metrics = require('@overleaf/metrics')
 const Settings = require('@overleaf/settings')
+const { MeteredStream } = require('@overleaf/stream-utils')
 const { CACHE_SUBDIR } = require('./OutputCacheManager')
 const { isExtraneousFile } = require('./ResourceWriter')
 
@@ -41,6 +42,8 @@ function getShard(projectId) {
  * @param {string} editorId
  * @param {[{path: string}]} outputFiles
  * @param {string} compileGroup
+ * @param {Record<string, number>} stats
+ * @param {Record<string, number>} timings
  * @param {Record<string, any>} options
  * @return {string | undefined}
  */
@@ -51,6 +54,8 @@ function notifyCLSICacheAboutBuild({
   editorId,
   outputFiles,
   compileGroup,
+  stats,
+  timings,
   options,
 }) {
   if (!Settings.apis.clsiCache.enabled) return undefined
@@ -61,10 +66,8 @@ function notifyCLSICacheAboutBuild({
    * @param {[{path: string}]} files
    */
   const enqueue = files => {
-    Metrics.count('clsi_cache_enqueue_files', files.length)
-    fetchNothing(`${url}/enqueue`, {
-      method: 'POST',
-      json: {
+    const body = Buffer.from(
+      JSON.stringify({
         projectId,
         userId,
         buildId,
@@ -73,8 +76,32 @@ function notifyCLSICacheAboutBuild({
         downloadHost: Settings.apis.clsi.downloadHost,
         clsiServerId: Settings.apis.clsi.clsiServerId,
         compileGroup,
+        stats,
+        timings,
         options,
-      },
+      })
+    )
+    const bodySize = body.byteLength
+    if (bodySize > 10_000_000) {
+      const outputPDF = files.find(f => f.path === 'output.pdf')
+      logger.warn(
+        {
+          projectId,
+          userId,
+          bodySize,
+          nFiles: files.length,
+          outputPDFSize:
+            outputPDF && Buffer.from(JSON.stringify(outputPDF)).byteLength,
+          nPDFCachingRanges: outputPDF?.ranges?.length,
+        },
+        'large clsi-cache request'
+      )
+    }
+    Metrics.count('clsi_cache_enqueue_files', files.length)
+    fetchNothing(`${url}/enqueue`, {
+      method: 'POST',
+      body,
+      headers: { 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(15_000),
     }).catch(err => {
       logger.warn(
@@ -204,7 +231,13 @@ async function downloadOutputDotSynctexFromCompileCache(
   const dst = Path.join(outputDir, 'output.synctex.gz')
   const tmp = dst + crypto.randomUUID()
   try {
-    await pipeline(stream, fs.createWriteStream(tmp))
+    await pipeline(
+      stream,
+      new MeteredStream(Metrics, 'clsi_cache_egress', {
+        path: 'output.synctex.gz',
+      }),
+      fs.createWriteStream(tmp)
+    )
     await fs.promises.rename(tmp, dst)
   } catch (err) {
     try {
@@ -253,6 +286,7 @@ async function downloadLatestCompileCache(projectId, userId, compileDir) {
   let abort = false
   await pipeline(
     stream,
+    new MeteredStream(Metrics, 'clsi_cache_egress', { path: 'output.tar.gz' }),
     createGunzip(),
     tarFs.extract(compileDir, {
       // use ignore hook for counting entries (files+folders) and validation.

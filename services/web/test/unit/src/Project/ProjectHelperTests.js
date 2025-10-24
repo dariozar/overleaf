@@ -4,6 +4,12 @@ const { ObjectId } = require('mongodb-legacy')
 
 const MODULE_PATH = '../../../../app/src/Features/Project/ProjectHelper.js'
 
+function _mapToAllowed(images) {
+  return images.map(image => {
+    return { imageName: image.imageName, allowed: image.allowed }
+  })
+}
+
 describe('ProjectHelper', function () {
   beforeEach(function () {
     this.project = {
@@ -14,6 +20,8 @@ describe('ProjectHelper', function () {
       _id: '588f3ddae8ebc1bac07c9fa4',
       first_name: 'bjkdsjfk',
       features: {},
+      labsProgram: true,
+      labsExperiments: ['monthly-texlive'],
     }
 
     this.adminUser = {
@@ -31,6 +39,11 @@ describe('ProjectHelper', function () {
           imageName: 'texlive-full:2020.1',
           imageDesc: 'TeX Live 2020',
           alphaOnly: true,
+        },
+        {
+          imageName: 'texlive-full:2021.1',
+          imageDesc: 'TeX Live 2021',
+          monthlyExperimental: true,
         },
       ],
     }
@@ -101,134 +114,6 @@ describe('ProjectHelper', function () {
     })
   })
 
-  describe('calculateArchivedArray', function () {
-    describe('project.archived being an array', function () {
-      it('returns an array adding the current user id when archiving', function () {
-        const project = { archived: [] }
-        const result = this.ProjectHelper.calculateArchivedArray(
-          project,
-          new ObjectId('5c922599cdb09e014aa7d499'),
-          'ARCHIVE'
-        )
-        expect(result).to.deep.equal([new ObjectId('5c922599cdb09e014aa7d499')])
-      })
-
-      it('returns an array without the current user id when unarchiving', function () {
-        const project = { archived: [new ObjectId('5c922599cdb09e014aa7d499')] }
-        const result = this.ProjectHelper.calculateArchivedArray(
-          project,
-          new ObjectId('5c922599cdb09e014aa7d499'),
-          'UNARCHIVE'
-        )
-        expect(result).to.deep.equal([])
-      })
-    })
-
-    describe('project.archived being a boolean and being true', function () {
-      it('returns an array of all associated user ids when archiving', function () {
-        const project = {
-          archived: true,
-          owner_ref: this.user._id,
-          collaberator_refs: [
-            new ObjectId('4f2cfb341eb5855a5b000f8b'),
-            new ObjectId('5c45f3bd425ead01488675aa'),
-          ],
-          readOnly_refs: [new ObjectId('5c92243fcdb09e014aa7d487')],
-          tokenAccessReadAndWrite_refs: [
-            new ObjectId('5c922599cdb09e014aa7d499'),
-          ],
-          tokenAccessReadOnly_refs: [],
-        }
-
-        const result = this.ProjectHelper.calculateArchivedArray(
-          project,
-          this.user._id,
-          'ARCHIVE'
-        )
-        expect(result).to.deep.equal([
-          this.user._id,
-          new ObjectId('4f2cfb341eb5855a5b000f8b'),
-          new ObjectId('5c45f3bd425ead01488675aa'),
-          new ObjectId('5c92243fcdb09e014aa7d487'),
-          new ObjectId('5c922599cdb09e014aa7d499'),
-        ])
-      })
-
-      it('returns an array of all associated users without the current user id when unarchived', function () {
-        const project = {
-          archived: true,
-          owner_ref: this.user._id,
-          collaberator_refs: [
-            new ObjectId('4f2cfb341eb5855a5b000f8b'),
-            new ObjectId('5c45f3bd425ead01488675aa'),
-            new ObjectId('5c922599cdb09e014aa7d499'),
-          ],
-          readOnly_refs: [new ObjectId('5c92243fcdb09e014aa7d487')],
-          tokenAccessReadAndWrite_refs: [
-            new ObjectId('5c922599cdb09e014aa7d499'),
-          ],
-          tokenAccessReadOnly_refs: [],
-        }
-
-        const result = this.ProjectHelper.calculateArchivedArray(
-          project,
-          this.user._id,
-          'UNARCHIVE'
-        )
-        expect(result).to.deep.equal([
-          new ObjectId('4f2cfb341eb5855a5b000f8b'),
-          new ObjectId('5c45f3bd425ead01488675aa'),
-          new ObjectId('5c922599cdb09e014aa7d499'),
-          new ObjectId('5c92243fcdb09e014aa7d487'),
-        ])
-      })
-    })
-
-    describe('project.archived being a boolean and being false', function () {
-      it('returns an array adding the current user id when archiving', function () {
-        const project = { archived: false }
-        const result = this.ProjectHelper.calculateArchivedArray(
-          project,
-          new ObjectId('5c922599cdb09e014aa7d499'),
-          'ARCHIVE'
-        )
-        expect(result).to.deep.equal([new ObjectId('5c922599cdb09e014aa7d499')])
-      })
-
-      it('returns an empty array when unarchiving', function () {
-        const project = { archived: false }
-        const result = this.ProjectHelper.calculateArchivedArray(
-          project,
-          new ObjectId('5c922599cdb09e014aa7d499'),
-          'UNARCHIVE'
-        )
-        expect(result).to.deep.equal([])
-      })
-    })
-
-    describe('project.archived not being set', function () {
-      it('returns an array adding the current user id when archiving', function () {
-        const project = { archived: undefined }
-        const result = this.ProjectHelper.calculateArchivedArray(
-          project,
-          new ObjectId('5c922599cdb09e014aa7d499'),
-          'ARCHIVE'
-        )
-        expect(result).to.deep.equal([new ObjectId('5c922599cdb09e014aa7d499')])
-      })
-
-      it('returns an empty array when unarchiving', function () {
-        const project = { archived: undefined }
-        const result = this.ProjectHelper.calculateArchivedArray(
-          project,
-          new ObjectId('5c922599cdb09e014aa7d499'),
-          'UNARCHIVE'
-        )
-        expect(result).to.deep.equal([])
-      })
-    })
-  })
-
   describe('compilerFromV1Engine', function () {
     it('returns the correct engine for latex_dvipdf', function () {
       expect(this.ProjectHelper.compilerFromV1Engine('latex_dvipdf')).to.equal(
@@ -256,31 +141,58 @@ describe('ProjectHelper', function () {
   })
 
   describe('getAllowedImagesForUser', function () {
-    it('filters out alpha-only images when the user is anonymous', function () {
+    it('marks alpha only images as not allowed when the user is anonymous', function () {
       const images = this.ProjectHelper.getAllowedImagesForUser(null)
-      const imageNames = images.map(image => image.imageName)
+      const imageNames = _mapToAllowed(images)
       expect(imageNames).to.deep.equal([
-        'texlive-full:2018.1',
-        'texlive-full:2019.1',
+        { imageName: 'texlive-full:2018.1', allowed: true },
+        { imageName: 'texlive-full:2019.1', allowed: true },
+        { imageName: 'texlive-full:2020.1', allowed: false },
+        { imageName: 'texlive-full:2021.1', allowed: false },
       ])
     })
 
-    it('filters out alpha-only images when the user is not admin', function () {
-      const images = this.ProjectHelper.getAllowedImagesForUser(this.user)
-      const imageNames = images.map(image => image.imageName)
+    it('marks monthly labs images as not allowed when the user is anonymous', function () {
+      const images = this.ProjectHelper.getAllowedImagesForUser(null)
+      const imageNames = _mapToAllowed(images)
       expect(imageNames).to.deep.equal([
-        'texlive-full:2018.1',
-        'texlive-full:2019.1',
+        { imageName: 'texlive-full:2018.1', allowed: true },
+        { imageName: 'texlive-full:2019.1', allowed: true },
+        { imageName: 'texlive-full:2020.1', allowed: false },
+        { imageName: 'texlive-full:2021.1', allowed: false },
+      ])
+    })
+
+    it('marks monthly labs images as allowed when the user is enrolled', function () {
+      const images = this.ProjectHelper.getAllowedImagesForUser(this.user)
+      const imageNames = _mapToAllowed(images)
+      expect(imageNames).to.deep.equal([
+        { imageName: 'texlive-full:2018.1', allowed: true },
+        { imageName: 'texlive-full:2019.1', allowed: true },
+        { imageName: 'texlive-full:2020.1', allowed: false },
+        { imageName: 'texlive-full:2021.1', allowed: true },
+      ])
+    })
+
+    it('marks alpha only images as not allowed when when the user is not admin', function () {
+      const images = this.ProjectHelper.getAllowedImagesForUser(this.user)
+      const imageNames = _mapToAllowed(images)
+      expect(imageNames).to.deep.equal([
+        { imageName: 'texlive-full:2018.1', allowed: true },
+        { imageName: 'texlive-full:2019.1', allowed: true },
+        { imageName: 'texlive-full:2020.1', allowed: false },
+        { imageName: 'texlive-full:2021.1', allowed: true },
       ])
     })
 
     it('returns all images when the user is admin', function () {
       const images = this.ProjectHelper.getAllowedImagesForUser(this.adminUser)
-      const imageNames = images.map(image => image.imageName)
+      const imageNames = _mapToAllowed(images)
       expect(imageNames).to.deep.equal([
-        'texlive-full:2018.1',
-        'texlive-full:2019.1',
-        'texlive-full:2020.1',
+        { imageName: 'texlive-full:2018.1', allowed: true },
+        { imageName: 'texlive-full:2019.1', allowed: true },
+        { imageName: 'texlive-full:2020.1', allowed: true },
+        { imageName: 'texlive-full:2021.1', allowed: false },
       ])
     })
   })

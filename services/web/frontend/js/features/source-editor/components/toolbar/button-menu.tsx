@@ -1,9 +1,9 @@
 import { FC, memo, useEffect, useRef } from 'react'
 import useDropdown from '../../../../shared/hooks/use-dropdown'
-import OLListGroup from '@/features/ui/components/ol/ol-list-group'
-import OLTooltip from '@/features/ui/components/ol/ol-tooltip'
-import OLOverlay from '@/features/ui/components/ol/ol-overlay'
-import OLPopover from '@/features/ui/components/ol/ol-popover'
+import OLListGroup from '@/shared/components/ol/ol-list-group'
+import OLTooltip from '@/shared/components/ol/ol-tooltip'
+import OLOverlay from '@/shared/components/ol/ol-overlay'
+import OLPopover from '@/shared/components/ol/ol-popover'
 import { EditorView } from '@codemirror/view'
 import { emitToolbarEvent } from '../../extensions/toolbar/utils/analytics'
 import { useCodeMirrorViewContext } from '../codemirror-context'
@@ -13,6 +13,7 @@ export const ToolbarButtonMenu: FC<
     id: string
     label: string
     icon: React.ReactNode
+    disabled?: boolean
     disablePopover?: boolean
     altCommand?: (view: EditorView) => void
   }>
@@ -21,6 +22,7 @@ export const ToolbarButtonMenu: FC<
   id,
   label,
   altCommand,
+  disabled,
   disablePopover,
   children,
 }) {
@@ -39,11 +41,16 @@ export const ToolbarButtonMenu: FC<
       type="button"
       className="ol-cm-toolbar-button"
       aria-label={label}
+      aria-disabled={disabled}
       onMouseDown={event => {
         event.preventDefault()
         event.stopPropagation()
       }}
       onClick={event => {
+        if (disabled) {
+          event.preventDefault()
+          return
+        }
         if (event.altKey && altCommand && open === false) {
           emitToolbarEvent(view, id)
           event.preventDefault()

@@ -4,6 +4,16 @@ const { fetchJson, fetchNothing } = require('@overleaf/fetch-utils')
 const settings = require('@overleaf/settings')
 const { callbackify } = require('util')
 
+async function getThread(projectId, threadId) {
+  return await fetchJson(chatApiUrl(`/project/${projectId}/thread/${threadId}`))
+}
+
+async function getThreadMessage(projectId, threadId, messageId) {
+  return await fetchJson(
+    chatApiUrl(`/project/${projectId}/thread/${threadId}/messages/${messageId}`)
+  )
+}
+
 async function getThreads(projectId) {
   return await fetchJson(chatApiUrl(`/project/${projectId}/threads`))
 }
@@ -33,6 +43,12 @@ async function getGlobalMessages(projectId, limit, before) {
   }
 
   return await fetchJson(url)
+}
+
+async function getGlobalMessage(projectId, messageId) {
+  return await fetchJson(
+    chatApiUrl(`/project/${projectId}/messages/${messageId}`)
+  )
 }
 
 async function sendComment(projectId, threadId, userId, content) {
@@ -81,6 +97,16 @@ async function editMessage(projectId, threadId, messageId, userId, content) {
   )
 }
 
+async function editGlobalMessage(projectId, messageId, userId, content) {
+  await fetchNothing(
+    chatApiUrl(`/project/${projectId}/messages/${messageId}/edit`),
+    {
+      method: 'POST',
+      json: { content, userId },
+    }
+  )
+}
+
 async function deleteMessage(projectId, threadId, messageId) {
   await fetchNothing(
     chatApiUrl(
@@ -95,6 +121,13 @@ async function deleteUserMessage(projectId, threadId, userId, messageId) {
     chatApiUrl(
       `/project/${projectId}/thread/${threadId}/user/${userId}/messages/${messageId}`
     ),
+    { method: 'DELETE' }
+  )
+}
+
+async function deleteGlobalMessage(projectId, messageId) {
+  await fetchNothing(
+    chatApiUrl(`/project/${projectId}/messages/${messageId}`),
     { method: 'DELETE' }
   )
 }
@@ -133,32 +166,42 @@ function chatApiUrl(path) {
 }
 
 module.exports = {
+  getThread: callbackify(getThread),
+  getThreadMessage: callbackify(getThreadMessage),
   getThreads: callbackify(getThreads),
   destroyProject: callbackify(destroyProject),
   sendGlobalMessage: callbackify(sendGlobalMessage),
   getGlobalMessages: callbackify(getGlobalMessages),
+  getGlobalMessage: callbackify(getGlobalMessage),
   sendComment: callbackify(sendComment),
   resolveThread: callbackify(resolveThread),
   reopenThread: callbackify(reopenThread),
   deleteThread: callbackify(deleteThread),
   editMessage: callbackify(editMessage),
+  editGlobalMessage: callbackify(editGlobalMessage),
   deleteMessage: callbackify(deleteMessage),
   deleteUserMessage: callbackify(deleteUserMessage),
+  deleteGlobalMessage: callbackify(deleteGlobalMessage),
   getResolvedThreadIds: callbackify(getResolvedThreadIds),
   duplicateCommentThreads: callbackify(duplicateCommentThreads),
   generateThreadData: callbackify(generateThreadData),
   promises: {
+    getThread,
+    getThreadMessage,
     getThreads,
     destroyProject,
     sendGlobalMessage,
     getGlobalMessages,
+    getGlobalMessage,
     sendComment,
     resolveThread,
     reopenThread,
     deleteThread,
     editMessage,
+    editGlobalMessage,
     deleteMessage,
     deleteUserMessage,
+    deleteGlobalMessage,
     getResolvedThreadIds,
     duplicateCommentThreads,
     generateThreadData,

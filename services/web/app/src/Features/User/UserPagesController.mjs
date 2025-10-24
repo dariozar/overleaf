@@ -3,14 +3,13 @@ import OError from '@overleaf/o-error'
 import UserSessionsManager from './UserSessionsManager.js'
 import logger from '@overleaf/logger'
 import Settings from '@overleaf/settings'
-import AuthenticationController from '../Authentication/AuthenticationController.js'
+import AuthenticationController from '../Authentication/AuthenticationController.mjs'
 import SessionManager from '../Authentication/SessionManager.js'
 import NewsletterManager from '../Newsletter/NewsletterManager.js'
 import SubscriptionLocator from '../Subscription/SubscriptionLocator.js'
 import _ from 'lodash'
 import { expressify } from '@overleaf/promise-utils'
 import Features from '../../infrastructure/Features.js'
-import SplitTestHandler from '../SplitTests/SplitTestHandler.js'
 import Modules from '../../infrastructure/Modules.js'
 
 async function settingsPage(req, res) {
@@ -193,16 +192,8 @@ async function reconfirmAccountPage(req, res) {
   const pageData = {
     reconfirm_email: req.session.reconfirm_email,
   }
-  const { variant } = await SplitTestHandler.promises.getAssignment(
-    req,
-    res,
-    'bs5-auth-pages'
-  )
 
-  const template =
-    variant === 'enabled' ? 'user/reconfirm-bs5' : 'user/reconfirm'
-
-  res.render(template, pageData)
+  res.render('user/reconfirm', pageData)
 }
 
 const UserPagesController = {
@@ -233,10 +224,15 @@ const UserPagesController = {
     ) {
       AuthenticationController.setRedirectInSession(req, req.query.redir)
     }
+    const metadata = { robotsNoindexNofollow: false }
+    if (Object.keys(req.query).length !== 0) {
+      metadata.robotsNoindexNofollow = true
+    }
     res.render('user/login', {
       title: Settings.nav?.login_support_title || 'login',
       login_support_title: Settings.nav?.login_support_title,
       login_support_text: Settings.nav?.login_support_text,
+      metadata,
     })
   },
 

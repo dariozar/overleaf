@@ -11,10 +11,10 @@ import { getJSON } from '../../../infrastructure/fetch-json'
 import useAbortController from '@/shared/hooks/use-abort-controller'
 import { debugConsole } from '@/utils/debugging'
 import getMeta from '@/utils/meta'
-import OLRow from '@/features/ui/components/ol/ol-row'
-import OLCol from '@/features/ui/components/ol/ol-col'
-import OLButton from '@/features/ui/components/ol/ol-button'
-import OLTooltip from '@/features/ui/components/ol/ol-tooltip'
+import OLRow from '@/shared/components/ol/ol-row'
+import OLCol from '@/shared/components/ol/ol-col'
+import OLButton from '@/shared/components/ol/ol-button'
+import OLTooltip from '@/shared/components/ol/ol-tooltip'
 import MaterialIcon from '@/shared/components/material-icon'
 
 type Tokens = {
@@ -30,10 +30,13 @@ type AccessLevel = 'private' | 'tokenBased' | 'readAndWrite' | 'readOnly'
 export default function LinkSharing() {
   const [inflight, setInflight] = useState(false)
   const [showLinks, setShowLinks] = useState(true)
+  const linkSharingEnabled =
+    getMeta('ol-capabilities')?.includes('link-sharing')
 
   const { monitorRequest } = useShareProjectContext()
 
-  const { _id: projectId, publicAccessLevel } = useProjectContext()
+  const { projectId, project } = useProjectContext()
+  const { publicAccessLevel } = project || {}
 
   // set the access level of a project
   const setAccessLevel = useCallback(
@@ -56,6 +59,10 @@ export default function LinkSharing() {
     },
     [monitorRequest, projectId]
   )
+
+  if (!linkSharingEnabled) {
+    return null
+  }
 
   switch (publicAccessLevel) {
     // Private (with token-access available)
@@ -145,7 +152,7 @@ function TokenBasedSharing({
   showLinks: boolean
 }) {
   const { t } = useTranslation()
-  const { _id: projectId } = useProjectContext()
+  const { projectId } = useProjectContext()
 
   const [tokens, setTokens] = useState<Tokens | null>(null)
 
@@ -244,7 +251,7 @@ function LegacySharing({
 
 export function ReadOnlyTokenLink() {
   const { t } = useTranslation()
-  const { _id: projectId } = useProjectContext()
+  const { projectId } = useProjectContext()
 
   const [tokens, setTokens] = useState<Tokens | null>(null)
 

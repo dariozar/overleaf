@@ -6,19 +6,18 @@ import metrics from '@overleaf/metrics'
 import Settings from '@overleaf/settings'
 import logger from '@overleaf/logger'
 import PlansLocator from './app/src/Features/Subscription/PlansLocator.js'
-import HistoryManager from './app/src/Features/History/HistoryManager.js'
-import SiteAdminHandler from './app/src/infrastructure/SiteAdminHandler.js'
+import HistoryManager from './app/src/Features/History/HistoryManager.mjs'
+import SiteAdminHandler from './app/src/infrastructure/SiteAdminHandler.mjs'
 import http from 'node:http'
 import https from 'node:https'
-import * as Serializers from './app/src/infrastructure/LoggerSerializers.js'
+import Serializers from './app/src/infrastructure/LoggerSerializers.mjs'
 import Server from './app/src/infrastructure/Server.mjs'
-import QueueWorkers from './app/src/infrastructure/QueueWorkers.js'
+import QueueWorkers from './app/src/infrastructure/QueueWorkers.mjs'
 import mongodb from './app/src/infrastructure/mongodb.js'
 import mongoose from './app/src/infrastructure/Mongoose.js'
 import { triggerGracefulShutdown } from './app/src/infrastructure/GracefulShutdown.js'
 import FileWriter from './app/src/infrastructure/FileWriter.js'
 import { fileURLToPath } from 'node:url'
-import Features from './app/src/infrastructure/Features.js'
 
 metrics.gauge(
   'web_startup',
@@ -55,15 +54,6 @@ if (Settings.catchErrors) {
 
 // Create ./data/dumpFolder if needed
 FileWriter.ensureDumpFolderExists()
-
-if (
-  !Features.hasFeature('project-history-blobs') &&
-  !Features.hasFeature('filestore')
-) {
-  throw new Error(
-    'invalid config: must enable either project-history-blobs (Settings.enableProjectHistoryBlobs=true) or enable filestore (Settings.disableFilestore=false)'
-  )
-}
 
 // handle SIGTERM for graceful shutdown in kubernetes
 process.on('SIGTERM', function (signal) {

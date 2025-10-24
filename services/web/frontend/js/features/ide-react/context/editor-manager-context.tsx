@@ -9,8 +9,6 @@ import {
   useState,
 } from 'react'
 import { sendMB } from '@/infrastructure/event-tracking'
-import useScopeValue from '@/shared/hooks/use-scope-value'
-import { useIdeContext } from '@/shared/context/ide-context'
 import { OpenDocuments } from '@/features/ide-react/editor/open-documents'
 import EditorWatchdogManager from '@/features/ide-react/connection/editor-watchdog-manager'
 import { useIdeReactContext } from '@/features/ide-react/context/ide-react-context'
@@ -35,10 +33,9 @@ import { EditorType } from '@/features/ide-react/editor/types/editor-type'
 import { DocId } from '../../../../../types/project-settings'
 import { Update } from '@/features/history/services/types/update'
 import { useDebugDiffTracker } from '../hooks/use-debug-diff-tracker'
-import { useEditorContext } from '@/shared/context/editor-context'
-import useScopeValueSetterOnly from '@/shared/hooks/use-scope-value-setter-only'
-import { BinaryFile } from '@/features/file-view/types/binary-file'
 import { convertFileRefToBinaryFile } from '@/features/ide-react/util/file-view'
+import { useEditorOpenDocContext } from '@/features/ide-react/context/editor-open-doc-context'
+import { useEditorPropertiesContext } from '@/features/ide-react/context/editor-properties-context'
 
 export interface GotoOffsetOptions {
   gotoOffset: number
@@ -54,9 +51,6 @@ interface OpenDocOptions
 
 export type EditorManager = {
   getEditorType: () => EditorType | null
-  showSymbolPalette: boolean
-  currentDocument: DocumentContainer | null
-  currentDocumentId: DocId | null
   getCurrentDocValue: () => string | null
   getCurrentDocumentId: () => DocId | null
   setIgnoringExternalUpdates: (value: boolean) => void
@@ -64,16 +58,9 @@ export type EditorManager = {
   openDoc: (document: Doc, options?: OpenDocOptions) => void
   openDocs: OpenDocuments
   openFileWithId: (fileId: string) => void
-  openInitialDoc: (docId: string) => void
-  openDocName: string | null
-  setOpenDocName: (openDocName: string) => void
+  openInitialDoc: (docId?: string) => void
   isLoading: boolean
-  trackChanges: boolean
   jumpToLine: (options: GotoLineOptions) => void
-  wantTrackChanges: boolean
-  setWantTrackChanges: React.Dispatch<
-    React.SetStateAction<EditorManager['wantTrackChanges']>
-  >
   debugTimers: React.MutableRefObject<Record<string, number>>
 }
 
@@ -93,36 +80,29 @@ export const EditorManagerProvider: FC<React.PropsWithChildren> = ({
   children,
 }) => {
   const { t } = useTranslation()
-  const { scopeStore } = useIdeContext()
-  const { reportError, eventEmitter, projectId } = useIdeReactContext()
-  const { setOutOfSync } = useEditorContext()
+  const { reportError, eventEmitter, projectId, setOutOfSync } =
+    useIdeReactContext()
   const { socket, closeConnection, connectionState } = useConnectionContext()
-  const { view, setView } = useLayoutContext()
+  const { view, setView, setOpenFile } = useLayoutContext()
   const { showGenericMessageModal, genericModalVisible, showOutOfSyncModal } =
     useModalsContext()
   const { id: userId } = useUserContext()
-
-  const [showSymbolPalette, setShowSymbolPalette] = useScopeValue<boolean>(
-    'editor.showSymbolPalette'
-  )
-  const [showVisual] = useScopeValue<boolean>('editor.showVisual')
-  const [currentDocument, setCurrentDocument] =
-    useScopeValue<DocumentContainer | null>('editor.sharejs_doc')
-  const [currentDocumentId, setCurrentDocumentId] = useScopeValue<DocId | null>(
-    'editor.open_doc_id'
-  )
-  const [openDocName, setOpenDocName] = useScopeValue<string | null>(
-    'editor.open_doc_name'
-  )
-  const [opening, setOpening] = useScopeValue<boolean>('editor.opening')
-  const [errorState, setIsInErrorState] =
-    useScopeValue<boolean>('editor.error_state')
-  const [trackChanges, setTrackChanges] = useScopeValue<boolean>(
-    'editor.trackChanges'
-  )
-  const [wantTrackChanges, setWantTrackChanges] = useScopeValue<boolean>(
-    'editor.wantTrackChanges'
-  )
+  const {
+    showVisual,
+    opening,
+    setOpening,
+    errorState,
+    setErrorState,
+    setTrackChanges,
+    wantTrackChanges,
+  } = useEditorPropertiesContext()
+  const {
+    currentDocumentId,
+    setCurrentDocumentId,
+    setOpenDocName,
+    currentDocument,
+    setCurrentDocument,
+  } = useEditorOpenDocContext()
 
   const wantTrackChangesRef = useRef(wantTrackChanges)
   useEffect(() => {
@@ -197,22 +177,6 @@ export const EditorManagerProvider: FC<React.PropsWithChildren> = ({
   }, [currentDocumentId, currentDocumentIdStorageKey])
 
   const editorOpenDocEpochRef = useRef(0)
-
-  // TODO: This looks dodgy because it wraps a state setter and is itself
-  // stored in React state in the scope store. The problem is that it needs to
-  // be exposed via the scope store because some components access it that way;
-  // it would be better to simply access it from a context, but the current
-  // implementation in EditorManager interacts with Angular scope to update
-  // the layout. Once Angular is gone, this can become a context method.
-  useEffect(() => {
-    scopeStore.set('editor.toggleSymbolPalette', () => {
-      setShowSymbolPalette(show => {
-        const newValue = !show
-        sendMB(newValue ? 'symbol-palette-show' : 'symbol-palette-hide')
-        return newValue
-      })
-    })
-  }, [scopeStore, setShowSymbolPalette])
 
   const getEditorType = useCallback((): EditorType | null => {
     if (!currentDocument) {
@@ -438,20 +402,31 @@ export const EditorManagerProvider: FC<React.PropsWithChildren> = ({
           })
         )
         if (hasGotoLine(options)) {
-          window.setTimeout(() => jumpToLine(options))
+          const jump = () => jumpToLine(options)
 
-          // Jump to the line again after a stored scroll position has been restored
           if (isNewDoc) {
-            window.addEventListener(
-              'editor:scroll-position-restored',
-              () => jumpToLine(options),
-              { once: true }
-            )
+            // Jump to the line after a stored scroll position has been restored
+            window.addEventListener('editor:scroll-position-restored', jump, {
+              once: true,
+            })
+          } else {
+            // Jump directly to the line
+            jump()
           }
         } else if (hasGotoOffset(options)) {
-          window.setTimeout(() => {
+          const jump = () => {
             eventEmitter.emit('editor:gotoOffset', options)
-          })
+          }
+
+          if (isNewDoc) {
+            // Jump to the offset after a stored scroll position has been restored
+            window.addEventListener('editor:scroll-position-restored', jump, {
+              once: true,
+            })
+          } else {
+            // Jump directly to the offset
+            jump()
+          }
         }
 
         resolve(doc)
@@ -521,8 +496,6 @@ export const EditorManagerProvider: FC<React.PropsWithChildren> = ({
     [fileTreeData, openDoc]
   )
 
-  const [, setOpenFile] = useScopeValueSetterOnly<BinaryFile | null>('openFile')
-
   const openFileWithId = useCallback(
     (fileRefId: string) => {
       const fileRef = findFileRefEntityById(fileTreeData, fileRefId)
@@ -540,7 +513,7 @@ export const EditorManagerProvider: FC<React.PropsWithChildren> = ({
   )
 
   const openInitialDoc = useCallback(
-    (fallbackDocId: string) => {
+    (fallbackDocId?: string) => {
       const docId =
         customLocalStorage.getItem(currentDocumentIdStorageKey) || fallbackDocId
       if (docId) {
@@ -596,7 +569,7 @@ export const EditorManagerProvider: FC<React.PropsWithChildren> = ({
         reportError(error, meta)
 
         // Tell the user about the error state.
-        setIsInErrorState(true)
+        setErrorState(true)
         // Ensure that the editor is locked
         setOutOfSync(true)
         // Display the "out of sync" modal
@@ -623,7 +596,7 @@ export const EditorManagerProvider: FC<React.PropsWithChildren> = ({
     eventEmitter,
     openDoc,
     reportError,
-    setIsInErrorState,
+    setErrorState,
     showGenericMessageModal,
     showOutOfSyncModal,
     setOutOfSync,
@@ -670,31 +643,20 @@ export const EditorManagerProvider: FC<React.PropsWithChildren> = ({
   const value: EditorManager = useMemo(
     () => ({
       getEditorType,
-      showSymbolPalette,
-      currentDocument,
-      currentDocumentId,
       getCurrentDocValue,
       getCurrentDocumentId,
       setIgnoringExternalUpdates,
       openDocWithId,
       openDoc,
       openDocs,
-      openDocName,
-      setOpenDocName,
-      trackChanges,
       isLoading,
       openFileWithId,
       openInitialDoc,
       jumpToLine,
-      wantTrackChanges,
-      setWantTrackChanges,
       debugTimers,
     }),
     [
       getEditorType,
-      showSymbolPalette,
-      currentDocument,
-      currentDocumentId,
       getCurrentDocValue,
       getCurrentDocumentId,
       setIgnoringExternalUpdates,
@@ -703,13 +665,8 @@ export const EditorManagerProvider: FC<React.PropsWithChildren> = ({
       openDocs,
       openFileWithId,
       openInitialDoc,
-      openDocName,
-      setOpenDocName,
-      trackChanges,
       isLoading,
       jumpToLine,
-      wantTrackChanges,
-      setWantTrackChanges,
       debugTimers,
     ]
   )

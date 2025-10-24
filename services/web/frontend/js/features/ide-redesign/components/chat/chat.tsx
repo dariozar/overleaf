@@ -9,8 +9,8 @@ import { useUserContext } from '@/shared/context/user-context'
 import { lazy, Suspense, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import classNames from 'classnames'
-import { RailIndicator } from '../rail-indicator'
-import RailPanelHeader from '../rail-panel-header'
+import { RailIndicator } from '../rail/rail-indicator'
+import RailPanelHeader from '../rail/rail-panel-header'
 
 const MessageList = lazy(() => import('../../../chat/components/message-list'))
 
@@ -48,11 +48,6 @@ export const ChatPane = () => {
 
   const shouldDisplayPlaceholder = status !== 'pending' && messages.length === 0
 
-  const messageContentCount = messages.reduce(
-    (acc, { contents }) => acc + contents.length,
-    0
-  )
-
   if (error) {
     // let user try recover from fetch errors
     if (error instanceof FetchError) {
@@ -69,13 +64,13 @@ export const ChatPane = () => {
     <div className="chat-panel">
       <RailPanelHeader title={t('collaborator_chat')} />
       <div className="chat-wrapper">
-        <aside className="chat">
+        <aside className="chat" aria-label={t('chat')}>
           <InfiniteScroll
             atEnd={atEnd}
             className="messages"
             fetchData={loadMoreMessages}
             isLoading={status === 'pending'}
-            itemCount={messageContentCount}
+            itemCount={messages.length}
           >
             <div className={classNames({ 'h-100': shouldDisplayPlaceholder })}>
               <h2 className="visually-hidden">{t('chat')}</h2>

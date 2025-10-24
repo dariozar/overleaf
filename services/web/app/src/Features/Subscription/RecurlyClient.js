@@ -23,11 +23,13 @@ const {
   SubtotalLimitExceededError,
 } = require('./Errors')
 const RecurlyMetrics = require('./RecurlyMetrics')
+const { isStandaloneAiAddOnPlanCode, AI_ADD_ON_CODE } = require('./AiHelper')
 
 /**
  * @import { PaymentProviderSubscriptionChangeRequest } from './PaymentProviderEntities'
  * @import { PaymentProviderSubscriptionUpdateRequest } from './PaymentProviderEntities'
  * @import { PaymentMethod } from './types'
+ * @import { CurrencyCode } from '../../../../types/subscription/currency'
  */
 
 class RecurlyClientWithErrorHandling extends recurly.Client {
@@ -89,7 +91,7 @@ async function createAccountForUserId(userId) {
   }
   const account = await client.createAccount(accountCreate)
   logger.debug({ userId, account }, 'created recurly account')
-  return account
+  return accountFromApi(account)
 }
 
 /**
@@ -329,18 +331,32 @@ async function cancelSubscriptionByUuid(subscriptionUuid) {
   try {
     return await client.cancelSubscription('uuid-' + subscriptionUuid)
   } catch (err) {
-    if (err instanceof recurly.errors.ValidationError) {
-      if (
-        err.message === 'Only active and future subscriptions can be canceled.'
-      ) {
-        logger.debug(
-          { subscriptionUuid },
-          'subscription cancellation failed, subscription not active'
-        )
-      }
-    } else {
+    if (!(err instanceof recurly.errors.ValidationError)) {
       throw err
     }
+
+    const errorMessage = err.message || ''
+
+    if (
+      errorMessage === 'Only active and future subscriptions can be canceled.'
+    ) {
+      logger.debug(
+        { subscriptionUuid },
+        'subscription cancellation failed, subscription not active'
+      )
+    } else if (
+      errorMessage.includes(
+        'Cannot cancel a paused subscription in the last cycle of the term'
+      )
+    ) {
+      logger.debug(
+        { subscriptionUuid },
+        'Terminating subscription in last cycle of paused term'
+      )
+      return await terminateSubscriptionByUuid(subscriptionUuid)
+    }
+
+    throw err
   }
 }
 
@@ -488,7 +504,7 @@ function subscriptionFromApi(apiSubscription) {
     taxRate: apiSubscription.taxInfo?.rate ?? 0,
     taxAmount: apiSubscription.tax ?? 0,
     total: apiSubscription.total,
-    currency: apiSubscription.currency,
+    currency: /** @type {CurrencyCode} */ (apiSubscription.currency),
     periodStart: apiSubscription.currentPeriodStartedAt,
     periodEnd: apiSubscription.currentPeriodEndsAt,
     collectionMethod: apiSubscription.collectionMethod,
@@ -584,6 +600,23 @@ function computeImmediateCharge(subscriptionChange) {
   let total = subscriptionChange.invoiceCollection?.chargeInvoice?.total ?? 0
   let discount =
     subscriptionChange.invoiceCollection?.chargeInvoice?.discount ?? 0
+
+  const lineItems = []
+
+  for (const lineItem of subscriptionChange.invoiceCollection?.chargeInvoice
+    ?.lineItems || []) {
+    lineItems.push({
+      planCode: lineItem.planCode,
+      isAiAssist:
+        lineItem.addOnCode === AI_ADD_ON_CODE ||
+        isStandaloneAiAddOnPlanCode(lineItem.planCode),
+      description: lineItem.description ?? '',
+      subtotal: roundToTwoDecimal(lineItem.subtotal ?? 0),
+      discount: roundToTwoDecimal(lineItem.discount ?? 0),
+      tax: roundToTwoDecimal(lineItem.tax ?? 0),
+    })
+  }
+
   for (const creditInvoice of subscriptionChange.invoiceCollection
     ?.creditInvoices ?? []) {
     // The credit invoice numbers are already negative
@@ -592,12 +625,26 @@ function computeImmediateCharge(subscriptionChange) {
     // Tax rate can be different in credit invoice if a user relocates
     tax = roundToTwoDecimal(tax + (creditInvoice.tax ?? 0))
     discount = roundToTwoDecimal(discount + (creditInvoice.discount ?? 0))
+
+    for (const lineItem of creditInvoice.lineItems || []) {
+      lineItems.push({
+        planCode: lineItem.planCode,
+        isAiAssist:
+          lineItem.addOnCode === AI_ADD_ON_CODE ||
+          isStandaloneAiAddOnPlanCode(lineItem.planCode),
+        description: lineItem.description ?? '',
+        subtotal: roundToTwoDecimal(lineItem.subtotal ?? 0),
+        discount: roundToTwoDecimal(lineItem.discount ?? 0),
+        tax: roundToTwoDecimal(lineItem.tax ?? 0),
+      })
+    }
   }
   return new PaymentProviderImmediateCharge({
     subtotal,
     total,
     tax,
     discount,
+    lineItems,
   })
 }
 

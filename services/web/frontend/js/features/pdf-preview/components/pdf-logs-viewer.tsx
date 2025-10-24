@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
-import { memo, useState } from 'react'
+import { memo } from 'react'
 import classnames from 'classnames'
+import RollingBuildSelectedReminder from './rolling-build-selected-reminder'
 import PdfValidationIssue from './pdf-validation-issue'
 import StopOnFirstErrorPrompt from './stop-on-first-error-prompt'
 import TimeoutUpgradePromptNew from './timeout-upgrade-prompt-new'
@@ -14,7 +15,6 @@ import PdfCodeCheckFailedNotice from './pdf-code-check-failed-notice'
 import { useDetachCompileContext as useCompileContext } from '../../../shared/context/detach-compile-context'
 import PdfLogEntry from './pdf-log-entry'
 import { usePdfPreviewContext } from '@/features/pdf-preview/components/pdf-preview-provider'
-import TimeoutUpgradePaywallPrompt from './timeout-upgrade-paywall-prompt'
 import getMeta from '@/utils/meta'
 
 function PdfLogsViewer({ alwaysVisible = false }: { alwaysVisible?: boolean }) {
@@ -26,7 +26,6 @@ function PdfLogsViewer({ alwaysVisible = false }: { alwaysVisible?: boolean }) {
     validationIssues,
     showLogs,
     stoppedOnFirstError,
-    isProjectOwner,
   } = useCompileContext()
 
   const { loadingError } = usePdfPreviewContext()
@@ -35,24 +34,16 @@ function PdfLogsViewer({ alwaysVisible = false }: { alwaysVisible?: boolean }) {
 
   const { t } = useTranslation()
 
-  const [
-    isShowingPrimaryCompileTimeoutPaywall,
-    setIsShowingPrimaryCompileTimeoutPaywall,
-  ] = useState(false)
-  const isPaywallChangeCompileTimeoutEnabled = getMeta(
-    'ol-isPaywallChangeCompileTimeoutEnabled'
-  )
-
-  const isCompileTimeoutPaywallDisplay =
-    isProjectOwner && isPaywallChangeCompileTimeoutEnabled
-
   return (
     <div
       className={classnames('logs-pane', {
         hidden: !showLogs && !alwaysVisible && !loadingError,
       })}
+      data-testid="logs-pane"
     >
       <div className="logs-pane-content">
+        <RollingBuildSelectedReminder />
+
         {codeCheckFailed && <PdfCodeCheckFailedNotice />}
 
         {stoppedOnFirstError && <StopOnFirstErrorPrompt />}
@@ -60,13 +51,7 @@ function PdfLogsViewer({ alwaysVisible = false }: { alwaysVisible?: boolean }) {
         {loadingError && <PdfPreviewError error="pdf-viewer-loading-error" />}
 
         {compileTimeout < 60 && error === 'timedout' ? (
-          isCompileTimeoutPaywallDisplay ? (
-            <TimeoutUpgradePaywallPrompt
-              setIsShowingPrimary={setIsShowingPrimaryCompileTimeoutPaywall}
-            />
-          ) : (
-            <TimeoutUpgradePromptNew />
-          )
+          <TimeoutUpgradePromptNew />
         ) : (
           <>{error && <PdfPreviewError error={error} />}</>
         )}
@@ -92,12 +77,10 @@ function PdfLogsViewer({ alwaysVisible = false }: { alwaysVisible?: boolean }) {
           />
         )}
 
-        {!isShowingPrimaryCompileTimeoutPaywall && (
-          <div className="logs-pane-actions">
-            <PdfClearCacheButton />
-            <PdfDownloadFilesButton />
-          </div>
-        )}
+        <div className="logs-pane-actions">
+          <PdfClearCacheButton />
+          <PdfDownloadFilesButton />
+        </div>
       </div>
     </div>
   )
